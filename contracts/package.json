@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "deploy:sepolia": "npx hardhat ignition deploy ignition/modules/Realia.ts --network arbitrumSepolia --verify"
+    "deploy:sepolia": "npx hardhat ignition deploy ignition/modules/Realia.ts --network arbitrumSepolia --verify",
+    "verify:sepolia": "npx hardhat ignition verify chain-421614 --network arbitrumSepolia"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "^3.0.3",
