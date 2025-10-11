@@ -12,10 +12,10 @@ import { WalletSidebarButton } from './WalletSidebarButton';
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/mint", label: "Mint NFT", icon: ImageIcon },
-  { href: "/history", label: "Verification History", icon: Clock },
-  { href: "/nodes", label: "Verifier Nodes", icon: Server },
-  { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/settings", label: "Settings", icon: Settings },
+  // { href: "/history", label: "Verification History", icon: Clock },
+  // { href: "/nodes", label: "Verifier Nodes", icon: Server },
+  // { href: "/wallet", label: "Wallet", icon: Wallet },
+  // { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 export function Sidebar() {
