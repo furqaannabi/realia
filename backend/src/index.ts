@@ -1,10 +1,7 @@
 import express, { Application, Request, Response } from 'express';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-
-// Load environment variables
-dotenv.config();
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
