@@ -71,18 +71,51 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     _useOrder(OrderType.MINT);
     _mint(to, tokenId);
     _setTokenURI(tokenId, uri);
-    _payAgents(OrderType.MINT);
+    _payAgents(OrderType.MINT, getTopFiveAgents());
     emit Minted(to, tokenId);
   }
 
-  function _payAgents(OrderType orderType) internal {
+  function _payAgents(OrderType orderType, address[] memory agentsToPay) internal {
     uint256 amountBeforeFee = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     uint256 amountAfterFee = amountBeforeFee * (100 - PROTOCOL_FEE_PERCENTAGE) / 100;
-    uint256 amountPerAgent = amountAfterFee / agentAddresses.length;
-    for (uint256 i = 0; i < agentAddresses.length; i++) {
-      PYUSD.transfer(agentAddresses[i], amountPerAgent);
+    uint256 agentsToPayCount = 0;
+    for (uint256 i = 0; i < agentsToPay.length; i++) {
+      if (agents[agentsToPay[i]].isStaked) {
+        agentsToPayCount++;
+      }
+    }
+    uint256 amountPerAgent = amountAfterFee / agentsToPayCount;
+    for (uint256 i = 0; i < agentsToPay.length; i++) {
+      if (agents[agentsToPay[i]].isStaked) {
+        PYUSD.transfer(agentsToPay[i], amountPerAgent);
+      }
     }
     emit AgentsPaid(amountAfterFee, amountPerAgent);
+  }
+
+  function getTopFiveAgents() public view returns (address[] memory) {
+    uint256 count = agentAddresses.length < 5 ? agentAddresses.length : 5;
+    address[] memory topFiveAgents = new address[](count);
+    uint256[] memory topCounts = new uint256[](count);
+    
+    for (uint256 i = 0; i < agentAddresses.length; i++) {
+      if (!agents[agentAddresses[i]].isStaked) continue;
+      
+      uint256 agentCount = agents[agentAddresses[i]].verifiedCount;
+      
+      for (uint256 j = 0; j < count; j++) {
+        if (topFiveAgents[j] == address(0) || agentCount > topCounts[j]) {
+          for (uint256 k = count - 1; k > j; k--) {
+            topFiveAgents[k] = topFiveAgents[k - 1];
+            topCounts[k] = topCounts[k - 1];
+          }
+          topFiveAgents[j] = agentAddresses[i];
+          topCounts[j] = agentCount;
+          break;
+        }
+      }
+    }
+    return topFiveAgents;
   }
 
   function createOrder(OrderType orderType) external {
@@ -173,7 +206,9 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     
     uint256[] memory uniqueTokenIds = new uint256[](responses.length);
     uint256[] memory voteCounts = new uint256[](responses.length);
+    address[] memory agentsToPay = new address[](responses.length);
     uint256 uniqueCount = 0;
+    uint256 agentsToPayCount = 0;
     
     for (uint256 i = 0; i < responses.length; i++) {
       if (responses[i].verified) {
@@ -215,7 +250,8 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
           _slashAgent(responses[i].agent);
         } else {
           agents[responses[i].agent].verifiedCount++;
-          PYUSD.transfer(responses[i].agent, VERIFY_PRICE / REQUIRED_VERIFICATIONS);
+          agentsToPay[agentsToPayCount] = responses[i].agent;
+          agentsToPayCount++;
         }
       }
     } else {
@@ -224,13 +260,14 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
           _slashAgent(responses[i].agent);
         } else {
           agents[responses[i].agent].verifiedCount++;
-          PYUSD.transfer(responses[i].agent, VERIFY_PRICE / REQUIRED_VERIFICATIONS);
+          agentsToPay[agentsToPayCount] = responses[i].agent;
+          agentsToPayCount++;
         }
       }
     }
     
     verificationRequests[requestId].processed = true;
-    _payAgents(OrderType.VERIFY);
+    _payAgents(OrderType.VERIFY, agentsToPay);
     emit ProcessedVerification(requestId);
   }
 
