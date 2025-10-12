@@ -1,3 +1,4 @@
+import axios from "axios";
 import { pinata } from "../clients/pinata";
 import { s3Client } from "../clients/s3";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
@@ -12,8 +13,6 @@ type Metadata = {
     name: string;
     description: string;
     image: string;
-    external_url: string;
-    attributes: { trait_type: string; value: string }[];
 };
 
 /**
@@ -47,4 +46,19 @@ export const uploadMedia = async (file: Express.Multer.File, metadata: Metadata)
 export const getPresignedUrl = async (key: string): Promise<string> => {
     const command = new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME, Key: key });
     return await getSignedUrl(s3Client, command, { expiresIn: 60 * 60 * 24 });
+};
+
+export const getAIOrOriginalUrl = async (buffer: Buffer): Promise<boolean> => {
+    /*const formData = new FormData();
+    formData.append('image', new File([buffer], 'image.png', { type: 'image/png' }));
+    const response = await axios.post('https://api.aiornot.com/v2/image/sync', formData, {
+        headers: {
+            'Authorization': `Bearer ${process.env.AIORNOT_API_KEY}`,
+        },
+    });
+
+    if (response.data.report.ai_generated.verdict === 'ai') {
+        return true;
+    }*/
+    return false;
 };

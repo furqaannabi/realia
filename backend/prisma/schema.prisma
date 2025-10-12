@@ -14,11 +14,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model NFT {
+  id String @id @default(uuid())
+  tokenId String @unique
+  address String? @unique
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  image Image @relation(fields: [imageId], references: [id])
+  imageId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Image {
+  id String @id @default(uuid())
+  ipfsCid String @unique
+  s3Key String @unique
+  metadataCid String @unique
+  metadata Json
+  nft NFT[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Nonce {
-  id        String   @id @default(uuid())
-  nonce     String
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
+  id String @id @default(uuid())
+  nonce String @unique
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Session {
+  id String @id @default(uuid())
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  session String @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -27,6 +59,8 @@ model User {
   id        String   @id @default(uuid())
   walletAddress String   @unique
   nonce       Nonce[]
+  nft NFT[]
+  session Session[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import 'dotenv/config';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import routes from './routes';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,8 @@ app.get('/', (req: Request, res: Response) => {
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use('/api', routes);
 
 // Start server
 app.listen(PORT, () => {
