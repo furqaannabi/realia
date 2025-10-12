@@ -19,10 +19,22 @@ const config: HardhatUserConfig = {
       chainId: 421614,
     },
   },
-  verify: {
-  etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+  chainDescriptors: {
+    421614: {
+      name: "Arbitrum Sepolia",
+      blockExplorers: {
+        etherscan: {
+          name: "ArbiScan",
+          url: "https://sepolia.arbiscan.io",
+          apiUrl: "https://api.etherscan.io/v2/api",
+        },
+      },
+    },
   },
+  verify: {
+    etherscan: {
+      apiKey: ETHERSCAN_API_KEY,
+    },
   },
 };
 
