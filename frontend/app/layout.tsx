@@ -9,8 +9,7 @@ import "./globals.css"
 import { Suspense } from "react"
 import Provider from "@/components/Provider"
 
-
-
+import { Toaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
   title: "Realia",
@@ -36,6 +35,7 @@ export default function RootLayout({
               </Suspense>
             </main>
           </div>
+          <Toaster />
         </Provider>
         {/* Analytics component removed */}
       </body>
