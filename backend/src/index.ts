@@ -3,6 +3,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import routes from './routes';
+import morgan from 'morgan';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(morgan('dev'));
 
 // Routes
 app.get('/', (req: Request, res: Response) => {
