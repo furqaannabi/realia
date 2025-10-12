@@ -1,8 +1,8 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount } from 'wagmi';
-import { useEffect } from 'react';
+import { useAccount, useDisconnect } from 'wagmi';
+import { useEffect, useCallback, useRef } from 'react';
 import getNonce from "@/app/utils/web3";
 import { signMessage } from '@wagmi/core';
 import { config } from '@/app/utils/wallet';
@@ -15,46 +15,52 @@ import { AxiosError } from "axios";
 export function WalletSidebarButton() {
   const { isDisconnected, isConnected, address } = useAccount();
   const { user, updateUser } = useAuth((state) => state)
+  const disconnect = useDisconnect()
 
-  useEffect(() => {
-    if (isDisconnected) {
-      // Logout
-      const logout = async () => {
-        await api.post('/auth/logout');
-      }
+  // Use a ref to track last connection status so we can catch disconnect events
+  const wasConnected = useRef(isConnected);
 
-      // logout()
+  const login = async () => {
+    try {
+      const nonce = await getNonce(address as `0x${string}`)
+      console.log(nonce)
+      const signature = await signMessage(config, { message: nonce })
+
+      const res = await api.post('/auth/connect', {
+        address,
+        message: nonce,
+        signature
+      })
+
+      toast.success("User Authenticated Successfully")
+      return res.data;
+
+    } catch (error: any) {
+      console.log("Login error: ", error)
+      toast.error(error?.response?.data.error)
     }
-  }, [isDisconnected]);
+  }
 
-  useEffect(() => {
-    if (isConnected && !user) {
-      // Login
-      const login = async () => {
-        try {
-          const nonce = await getNonce(address as `0x${string}`)
-          console.log(nonce)
-          const signature = await signMessage(config, { message: nonce })
-
-          const res = await api.post('/auth/connect', {
-            address,
-            message: nonce,
-            signature
-          })
-
-          toast.success("User Authenticated Successfully")
-          return res.data;
-
-        } catch (error: any) {
-          console.log("Login error: ",error)
-          toast.error(error?.response?.data.error)
-        }
-
-      }
-
-      // login()
+  const handleLogout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout');
+      console.log("logout")
+    } catch (e) {
+      // optional: toast or log error
     }
-  }, [isConnected]);
+    updateUser(null);
+  }, [updateUser]);
+
+  // Watch for disconnect (i.e. when user clicks the RainbowKit disconnect button)
+  useEffect(() => {
+    // if user was connected and now isn't, log out
+    if (wasConnected.current && !isConnected) {
+      handleLogout();
+    }
+    wasConnected.current = isConnected;
+    // purposely not handling login here to avoid multiple triggers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, handleLogout]);
 
   useEffect(() => {
     const setUser = async () => {
@@ -62,15 +68,23 @@ export function WalletSidebarButton() {
         const user = await getCurrentUser()
 
         if (user) {
+          console.log("Fetch User", user)
           updateUser(user)
         }
-
       } catch (error: any) {
+        if (isConnected) {
+          console.log("Login")
+          login()
+        }
         toast.error(error?.response?.data?.error)
       }
     }
     setUser()
-  }, [])
+  }, [updateUser, isConnected])
+
+  useEffect(() => {
+    console.log(user)
+  }, [user])
 
   return (
     <div className="w-full">
