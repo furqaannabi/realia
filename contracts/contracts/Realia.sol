@@ -128,7 +128,6 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     require(!hasOrder(msg.sender, orderType), "User already has an order");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     PYUSD.transferFrom(msg.sender, address(this), amount);
-    PYUSD.transfer(owner(), amount * PROTOCOL_FEE_PERCENTAGE / 100);
     orders[msg.sender].push(Order(orderType, amount, false, false));
     emit OrderCreated(msg.sender, orderType, amount);
   }
@@ -151,6 +150,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
       Order memory order = orders[msg.sender][i];
       if (order.orderType == orderType && order.used == false && order.cancelled == false) {
         orders[msg.sender][i].used = true;
+        PYUSD.transfer(owner(), order.amount * PROTOCOL_FEE_PERCENTAGE / 100);
         return true;
       }
     }
@@ -192,7 +192,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     _payAgents(OrderType.VERIFY, getTopFiveAgents(), true);
     agents[agent] = Agent(0, false);
     for (uint256 i = 0; i < agentAddresses.length; i++) {
-      if (agentAddresses[i] == agent) {
+           if (agentAddresses[i] == agent) {
         agentAddresses[i] = agentAddresses[agentAddresses.length - 1];
         agentAddresses.pop();
         break;
