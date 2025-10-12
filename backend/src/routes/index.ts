@@ -396,17 +396,16 @@ router.post('/auth/connect', async (req: Request, res: Response) => {
  */
 router.post('/auth/logout', sessionMiddleware, async (req: Request, res: Response) => {
     try {
-        const session = await prisma.session.findFirst({
-            where: { userId: req.user.id }
-        });
-
-        if (session) {
-            await prisma.session.delete({
-                where: { id: session.id }
+            await prisma.session.deleteMany({
+                where: { userId: req.user.id }
             });
-        }
 
-        res.clearCookie('token').json({ message: 'Logged out successfully' });
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: true,
+            path: '/',
+            sameSite: 'none'
+        }).json({ message: 'Logged out successfully' });
     } catch (error) {
         console.error('Logout error:', error);
         res.status(500).json({ error: 'Failed to logout' });
