@@ -5,7 +5,8 @@ import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 type Media = {
-    cid: string;
+    metadataCid: string;
+    imageCid: string;
     key: string;
 };
 
@@ -33,7 +34,8 @@ export const uploadMedia = async (file: Express.Multer.File, metadata: Metadata)
     metadata.image = `ipfs://${imageResponse.cid}`;
     const metadataResponse = await pinata.upload.public.json(metadata);
     return {
-        cid: metadataResponse.cid,
+        metadataCid: metadataResponse.cid,
+        imageCid: imageResponse.cid,
         key: Key,
     };
 };

@@ -179,12 +179,12 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     emit Slashed(agent);
   }
 
-  function requestVerification(string memory uri) external {
-    require(hasOrder(msg.sender, OrderType.VERIFY), "No verify order found");
+  function requestVerification(address user, string memory uri) external onlyOwner {
+    require(hasOrder(user, OrderType.VERIFY), "No verify order found");
     _useOrder(OrderType.VERIFY);
     verificationId++;
-    verificationRequests[verificationId] = VerificationRequest(msg.sender, uri, false, block.timestamp);
-    emit VerificationRequested(msg.sender, verificationId);
+    verificationRequests[verificationId] = VerificationRequest(user, uri, false, block.timestamp);
+    emit VerificationRequested(user, verificationId);
   }
 
   function responseVerification(uint256 requestId, bool verified, uint256 propertyTokenId) external {

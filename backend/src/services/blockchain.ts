@@ -13,8 +13,7 @@ export enum OrderType {
  */
 export const mintNFT = async (to: string, uri: string): Promise<string | null> => {
     try {
-    const tx = await realia_contract.mint(to, uri);
-        await tx.wait();
+        const tx = await realia_contract.mint(to, uri);
         const receipt = await tx.wait();
         for (const log of receipt.logs) {
             try {
@@ -45,6 +44,34 @@ export const hasOrder = async (user: string, orderType: OrderType): Promise<bool
     try {
         const hasOrder = await realia_contract.hasOrder(user, orderType);
         return hasOrder;
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+};
+
+/**
+ * Request verification
+ * @param user - The address of the user to request verification
+ * @param uri - The URI of the NFT
+ * @returns The token ID of the verified NFT
+ */
+export const requestVerification = async (user: string, uri: string): Promise<string | null> => {
+    try {
+        const tx = await realia_contract.requestVerification(user, uri);
+        const receipt = await tx.wait();
+        for (const log of receipt.logs) {
+            try {
+                const parsed = realia_contract.interface.parseLog(log);
+                if (parsed && parsed.name === "VerificationRequested") {
+                    return parsed.args[1].toString();
+                }
+            } catch (error) {
+                console.error(error);
+                throw error;
+            }
+        }
+        return null;
     } catch (error) {
         console.error(error);
         throw error;

@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { verifyMessage } from 'ethers';
 import { sessionMiddleware } from '../middleware/session';
 import { uploadMedia, getAIOrOriginalUrl } from '../services/media';
-import { mintNFT, hasOrder, OrderType } from '../services/blockchain';
+import { mintNFT, hasOrder, OrderType, requestVerification } from '../services/blockchain';
 import prisma from '../clients/prisma';
 import { 
     createNonceSchema, 
@@ -14,6 +14,7 @@ import {
     mintNFTSchema, 
     tokenIdParamSchema 
 } from '../types/zod';
+import { ImageType } from '../generated/prisma';
 
 
 const router = Router();
@@ -28,7 +29,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  */
 router.post('/mint', sessionMiddleware, upload.single('image') as any, async (req: Request, res: Response) => {
     try {
-        if (!req.file) {
+        if (!req.file || !req.file.mimetype.startsWith('image/')) {
             res.status(400).json({ error: 'No image file provided' });
             return;
         }
@@ -64,27 +65,18 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
 
         const media = await uploadMedia(req.file, metadata);
 
-        const tokenId = await mintNFT(req.user.walletAddress, `ipfs://${media.cid}`);
+        const tokenId = await mintNFT(req.user.walletAddress, `ipfs://${media.metadataCid}`);
 
         if (!tokenId) {
             res.status(500).json({ error: 'Failed to mint NFT' });
             return;
         }
 
-        const image = await prisma.image.create({
-            data: {
-                ipfsCid: media.cid,
-                s3Key: media.key,
-                metadataCid: media.cid,
-                metadata: metadata as any
-            }
-        });
-
         const nft = await prisma.nFT.create({
             data: {
                 tokenId,
-                userId: req.user.id,
-                imageId: image.id
+                user: { connect: { id: req.user.id } },
+                image: { create: { ipfsCid: media.imageCid, s3Key: media.key, metadataCid: media.metadataCid, metadata: metadata as any, type: ImageType.NFT } }
             },
             include: {
                 image: true
@@ -95,13 +87,60 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             success: true,
             nft,
             tokenId,
-            ipfsUrl: `ipfs://${media.cid}`,
+            ipfsUrl: `ipfs://${media.imageCid}`,
             imageUrl: media.key
         });
 
     } catch (error) {
         console.error('Mint error:', error);
         res.status(500).json({ error: 'Failed to mint NFT' });
+    }
+});
+
+/**
+ * POST /verify
+ * Verify an NFT
+ * @param req - The request object
+ * @param res - The response object
+ * @returns The NFT
+ */
+router.post('/verify', sessionMiddleware, upload.single('image') as any, async (req: Request, res: Response) => {
+    try {
+        if (!req.file || !req.file.mimetype.startsWith('image/')) {
+            res.status(400).json({ error: 'No image file provided' });
+            return;
+        }
+
+        const hasVerifyOrder = await hasOrder(req.user.walletAddress, OrderType.VERIFY);
+        if (!hasVerifyOrder) {
+            res.status(403).json({ error: 'User does not have a verify order' });
+            return;
+        }
+        const metadata = {
+            name: 'Verification image',
+            description: 'Verification image',
+            image: ''
+        }
+
+        const media = await uploadMedia(req.file, metadata);
+        const verificationId = await requestVerification(req.user.walletAddress, `ipfs://${media.metadataCid}`);
+        if (!verificationId) {
+            res.status(500).json({ error: 'Failed to request verification' });
+            return;
+        }
+         await prisma.verification.create({
+            data: {
+                verificationId,
+                user: { connect: { id: req.user.id } },
+                image: { create: { ipfsCid: media.imageCid, s3Key: media.key, metadataCid: media.metadataCid, metadata: metadata as any, type: ImageType.VERIFICATION } }
+            }
+        });
+        res.status(200).json({ verificationId });
+        return;
+
+    } catch (error) {
+        console.error('Verify NFT error:', error);
+        res.status(500).json({ error: 'Failed to verify NFT' });
     }
 });
 
@@ -192,6 +231,66 @@ router.get('/nfts', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * GET /verifications
+ * Get all verifications for the authenticated user
+ * @param req - The request object
+ * @param res - The response object
+ * @returns The verifications
+ */
+router.get('/verifications', sessionMiddleware, async (req: Request, res: Response) => {
+    try {
+        const verifications = await prisma.verification.findMany({
+            where: { userId: req.user.id },
+            include: { image: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json({ verifications });
+    } catch (error) {
+        console.error('Get verifications error:', error);
+        res.status(500).json({ error: 'Failed to fetch verifications' });
+    }
+});
+
+/**
+ * GET /verifications/:verificationId
+ * Get a verification by verification ID
+ * @param req - The request object
+ * @param res - The response object
+ * @returns The verification
+ */
+router.get('/verifications/:verificationId', async (req: Request, res: Response) => {
+    try {
+        const verification = await prisma.verification.findUnique({
+            where: { verificationId: req.params.verificationId },
+            include: { image: true }
+        });
+        res.json({ verification });
+    } catch (error) {
+        console.error('Get verification error:', error);
+        res.status(500).json({ error: 'Failed to fetch verification' });
+    }
+});
+
+/**
+ * GET /verifications
+ * Get all verifications
+ * @param req - The request object
+ * @param res - The response object
+ * @returns The verifications
+ */
+router.get('/verifications', async (req: Request, res: Response) => {
+    try {
+        const verifications = await prisma.verification.findMany({
+            include: { image: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json({ verifications });
+    } catch (error) {
+        console.error('Get verifications error:', error);
+        res.status(500).json({ error: 'Failed to fetch verifications' });
+    }
+});
 /**
  * POST /auth/nonce
  * Create a nonce for wallet authentication

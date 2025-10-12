@@ -26,6 +26,22 @@ model NFT {
   updatedAt DateTime @updatedAt
 }
 
+model Verification {
+  id String @id @default(uuid())
+  verificationId String @unique
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  image Image @relation(fields: [imageId], references: [id])
+  imageId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ImageType {
+  NFT
+  VERIFICATION
+}
+
 model Image {
   id String @id @default(uuid())
   ipfsCid String @unique
@@ -33,6 +49,8 @@ model Image {
   metadataCid String @unique
   metadata Json
   nft NFT[]
+  verification Verification[]
+  type ImageType
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -61,6 +79,7 @@ model User {
   nonce       Nonce[]
   nft NFT[]
   session Session[]
+  verification Verification[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
