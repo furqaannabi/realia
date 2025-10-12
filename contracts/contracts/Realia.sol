@@ -66,7 +66,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   event AgentsPaid(uint256 amount, uint256 amountPerAgent);
 
   function mint(address to, string memory uri) external onlyOwner {
-    require(hasOrder(OrderType.MINT), "No mint order found");
+    require(hasOrder(to, OrderType.MINT), "No mint order found");
     tokenId++;
     _useOrder(OrderType.MINT);
     _mint(to, tokenId);
@@ -137,10 +137,10 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     return false;
   }
 
-  function hasOrder(OrderType orderType) public view returns (bool) {
+  function hasOrder(address user, OrderType orderType) public view returns (bool) {
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
-    for (uint256 i = 0; i < orders[msg.sender].length; i++) {
-      if (orders[msg.sender][i].orderType == orderType && orders[msg.sender][i].amount == amount && orders[msg.sender][i].used == false) {
+    for (uint256 i = 0; i < orders[user].length; i++) {
+      if (orders[user][i].orderType == orderType && orders[user][i].amount == amount && orders[user][i].used == false) {
         return true;
       }
     }
@@ -180,7 +180,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   function requestVerification(string memory uri) external {
-    require(hasOrder(OrderType.VERIFY), "No verify order found");
+    require(hasOrder(msg.sender, OrderType.VERIFY), "No verify order found");
     _useOrder(OrderType.VERIFY);
     verificationId++;
     verificationRequests[verificationId] = VerificationRequest(msg.sender, uri, false, block.timestamp);
