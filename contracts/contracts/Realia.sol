@@ -26,6 +26,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     OrderType orderType;
     uint256 amount;
     bool used;
+    bool cancelled;
   }
 
   struct Agent {
@@ -64,19 +65,24 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   event AgentRegistered(address agent);
   event AgentUnregistered(address agent);
   event AgentsPaid(uint256 amount, uint256 amountPerAgent);
-
+  event OrderCancelled(address to, OrderType orderType, uint256 amount);
   function mint(address to, string memory uri) external onlyOwner {
     require(hasOrder(to, OrderType.MINT), "No mint order found");
     tokenId++;
     _useOrder(OrderType.MINT);
     _mint(to, tokenId);
     _setTokenURI(tokenId, uri);
-    _payAgents(OrderType.MINT, getTopFiveAgents());
+    _payAgents(OrderType.MINT, getTopFiveAgents(), false);
     emit Minted(to, tokenId);
   }
 
-  function _payAgents(OrderType orderType, address[] memory agentsToPay) internal {
-    uint256 amountBeforeFee = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
+  function _payAgents(OrderType orderType, address[] memory agentsToPay, bool isSlash) internal {
+    uint256 amountBeforeFee;
+    if (isSlash) {
+      amountBeforeFee = MIN_AGENT_STAKING;
+    } else {
+      amountBeforeFee = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
+    }
     uint256 amountAfterFee = amountBeforeFee * (100 - PROTOCOL_FEE_PERCENTAGE) / 100;
     uint256 agentsToPayCount = 0;
     for (uint256 i = 0; i < agentsToPay.length; i++) {
@@ -119,18 +125,32 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   function createOrder(OrderType orderType) external {
+    require(!hasOrder(msg.sender, orderType), "User already has an order");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     PYUSD.transferFrom(msg.sender, address(this), amount);
-    PYUSD.transfer(owner(), amount * PROTOCOL_FEE_PERCENTAGE / 100);
-    orders[msg.sender].push(Order(orderType, amount, false));
+    orders[msg.sender].push(Order(orderType, amount, false, false));
     emit OrderCreated(msg.sender, orderType, amount);
   }
 
-  function _useOrder(OrderType orderType) internal returns (bool) {
+  function cancelOrder(OrderType orderType) external {
+    require(hasOrder(msg.sender, orderType), "User does not have an order");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
+    PYUSD.transfer(msg.sender, amount);
     for (uint256 i = 0; i < orders[msg.sender].length; i++) {
-      if (orders[msg.sender][i].orderType == orderType && orders[msg.sender][i].amount == amount && orders[msg.sender][i].used == false) {
+      if (orders[msg.sender][i].orderType == orderType) {
+        orders[msg.sender][i].cancelled = true;
+        break;
+      }
+    }
+    emit OrderCancelled(msg.sender, orderType, amount);
+  }
+
+  function _useOrder(OrderType orderType) internal returns (bool) {
+    for (uint256 i = 0; i < orders[msg.sender].length; i++) {
+      Order memory order = orders[msg.sender][i];
+      if (order.orderType == orderType && order.used == false && order.cancelled == false) {
         orders[msg.sender][i].used = true;
+        PYUSD.transfer(owner(), order.amount * PROTOCOL_FEE_PERCENTAGE / 100);
         return true;
       }
     }
@@ -138,9 +158,9 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   function hasOrder(address user, OrderType orderType) public view returns (bool) {
-    uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     for (uint256 i = 0; i < orders[user].length; i++) {
-      if (orders[user][i].orderType == orderType && orders[user][i].amount == amount && orders[user][i].used == false) {
+      Order memory order = orders[user][i];
+      if (order.orderType == orderType && order.used == false && order.cancelled == false) {
         return true;
       }
     }
@@ -168,9 +188,11 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   function _slashAgent(address agent) internal {
+    PYUSD.transfer(owner(), MIN_AGENT_STAKING * PROTOCOL_FEE_PERCENTAGE / 100);
+    _payAgents(OrderType.VERIFY, getTopFiveAgents(), true);
     agents[agent] = Agent(0, false);
     for (uint256 i = 0; i < agentAddresses.length; i++) {
-      if (agentAddresses[i] == agent) {
+           if (agentAddresses[i] == agent) {
         agentAddresses[i] = agentAddresses[agentAddresses.length - 1];
         agentAddresses.pop();
         break;
@@ -267,7 +289,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     }
     
     verificationRequests[requestId].processed = true;
-    _payAgents(OrderType.VERIFY, agentsToPay);
+    _payAgents(OrderType.VERIFY, agentsToPay, false);
     emit ProcessedVerification(requestId);
   }
 
