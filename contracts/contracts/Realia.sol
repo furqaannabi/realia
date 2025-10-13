@@ -93,6 +93,13 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
         agentsToPayCount++;
       }
     }
+    
+    if (agentsToPayCount == 0) {
+      PYUSD.transfer(owner(), amountAfterFee);
+      emit AgentsPaid(amountAfterFee, 0);
+      return;
+    }
+    
     uint256 amountPerAgent = amountAfterFee / agentsToPayCount;
     for (uint256 i = 0; i < agentsToPay.length; i++) {
       if (agents[agentsToPay[i]].isStaked) {
@@ -305,5 +312,24 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
 
   function tokenURI(uint256 _tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
     return super.tokenURI(_tokenId);
+  }
+
+  /**
+   * @dev Sync function for agents to get NFT count and NFT data
+   * @return totalCount The total number of NFTs minted
+   * @return nftIds Array of all NFT token IDs
+   * @return nftUris Array of all NFT URIs corresponding to the token IDs
+   */
+  function syncAgent() external view returns (uint256 totalCount, uint256[] memory nftIds, string[] memory nftUris) {
+    totalCount = tokenId;
+    nftIds = new uint256[](totalCount);
+    nftUris = new string[](totalCount);
+    
+    for (uint256 i = 1; i <= totalCount; i++) {
+      nftIds[i - 1] = i;
+      nftUris[i - 1] = tokenURI(i);
+    }
+    
+    return (totalCount, nftIds, nftUris);
   }
 }

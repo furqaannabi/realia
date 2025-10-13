@@ -1,5 +1,4 @@
-import requests, json
-import os
+import requests, json, base64, os
 
 BASE_URL = os.getenv("QDRANT_BASE_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
@@ -26,3 +25,30 @@ def search_points(vector, limit=5):
                       headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
                       data=json.dumps(data))
     return r.json()
+
+def ipfs_to_https(uri):
+    if uri.startswith("ipfs://"):
+        return uri.replace("ipfs://", "https://ipfs.io/ipfs/")
+    return uri
+
+def get_embeddings(uri):
+    r = requests.get(ipfs_to_https(uri))
+    imageLink = r.json()["image"]
+    r = requests.get(ipfs_to_https(imageLink))
+    b64 = base64.b64encode(r.content).decode("utf-8")
+    payload = {"image": b64}
+    r = requests.post("https://embedding.furqaannabi.com/get_image_embedding", json=payload)
+    embedding = r.json()["embedding"]
+    return embedding
+
+def get_point_count():
+    r = requests.get(f"{BASE_URL}/collections/realia",
+                     headers={"api-key": QDRANT_API_KEY})
+    if r.status_code == 200:
+        return r.json()["result"]["points_count"]
+    return 0
+
+def point_exists(point_id):
+    r = requests.get(f"{BASE_URL}/collections/realia/points/{point_id}",
+                     headers={"api-key": QDRANT_API_KEY})
+    return r.status_code == 200
