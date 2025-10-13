@@ -93,6 +93,13 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
         agentsToPayCount++;
       }
     }
+    
+    if (agentsToPayCount == 0) {
+      PYUSD.transfer(owner(), amountAfterFee);
+      emit AgentsPaid(amountAfterFee, 0);
+      return;
+    }
+    
     uint256 amountPerAgent = amountAfterFee / agentsToPayCount;
     for (uint256 i = 0; i < agentsToPay.length; i++) {
       if (agents[agentsToPay[i]].isStaked) {
