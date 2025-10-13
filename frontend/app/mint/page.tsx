@@ -72,59 +72,68 @@ export default function MintPage() {
   };
 
   const handleMint = async () => {
-    if (!file) return
-    // Generate a nonce (message) to sign
-    let message: string;
-    let signature: string;
-    try {
-      if (!address) throw new Error("Wallet not connected");
-      message = "Minting Realia NFT";
-      signature = await signMessage(config, { message });
-    } catch (err) {
-      toast.error("Error signing message");
-      setMinting(false);
+    if (!file) {
+      toast.error("Please upload an image.");
       return;
     }
+    let message: string;
+    let signature: string;
+    if (!address) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
+    setMinting(true);
+
     try {
-      setMinting(true)
-      const textData = {
-        name: "title",
-        ticker: "sym",
-        description: "Desc",
+      // Gather form values
+      // You should get name/description from UI input fields. Here, it's hardcoded for demonstration.
+      const name = "NFT Title";
+      const description = "NFT Description";
+
+      // Generate message & sign with user's wallet
+      message = `I am signing this message to verify my ownership of this wallet and approve minting my NFT on MyProject.\nTimestamp: ${Date.now()}`;
+      signature = await signMessage(config, { message });
+
+      // Approve PYUSD spend and create order before minting
+      await handleApprove();
+      await handleCreateOrder();
+
+      // Compose form data for backend
+      const dataToSend = {
+        name,
+        description,
         message,
-        signature,
+        signature
       };
 
-      // According to backend requirements: image in req.file, not in JSON
-      const formData = new FormData()
-      formData.append("image", file)
-      formData.append("data", JSON.stringify(textData))
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("data", JSON.stringify(dataToSend));
 
-      await handleApprove()
-
-      await handleCreateOrder()
-
+      // POST to backend /mint
       const res = await api.post('/mint', formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      })
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
-      console.log(res.data)
-
-      // If backend returns the minted info, update UI
-      if (res.data) {
-        setMinted(res.data)
-        toast.success("NFT Minted Successfully!")
+      if (res?.data && res.data.success) {
+        setMinted(res.data);
+        toast.success("NFT Minted Successfully!");
+      } else if (res?.data?.error) {
+        toast.error(res.data.error || "Failed to mint NFT");
+      } else {
+        toast.error("Failed to mint NFT (Unknown error)");
       }
 
     } catch (error: any) {
-      console.log(error)
-      toast.error(error?.response?.data?.error)
-      setMinting(false)
-
+      console.error("Mint error:", error);
+      if (error?.response?.data?.error) {
+        toast.error(error.response.data.error);
+      } else {
+        toast.error("Failed to mint NFT");
+      }
     } finally {
-      setMinting(false)
+      setMinting(false);
     }
   }
 
