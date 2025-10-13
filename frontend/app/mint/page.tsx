@@ -15,8 +15,13 @@ import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../utils/config"
 import { erc20Abi, parseUnits } from "viem"
 import RealiaABI from "@/app/utils/web3/Realia.json";
 import ERC20ABI from "@/app/utils/web3/ERC20.json";
-import { signMessage, simulateContract, writeContract } from "@wagmi/core"
+import { signMessage, simulateContract, writeContract, readContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
+
+// --- Mint price and contract order type constants from Solidity (see file_context_0) ---
+const MINT_PRICE = "1"; // 1e6 (6 decimals), string for parseUnits
+const ORDER_TYPE_MINT = 1;
+
 type MintInfo = {
   id: string
   imageHash: string
@@ -29,111 +34,165 @@ export default function MintPage() {
   const [file, setFile] = useState<File | null>(null)
   const [minted, setMinted] = useState<MintInfo | null>(null)
   const [minting, setMinting] = useState(false)
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState<string>("")
 
-  const { address } = useAccount();
-  const { writeContractAsync: writeApprove } = useWriteContract();
+  const { address } = useAccount()
+  const { writeContractAsync: writeApprove } = useWriteContract()
 
-  // --- step 1: Approve PYUSD spend ---
+  // Returns a number, not boolean. Used by 'hasOrder' below.
+  const hasMintOrder = async () => {
+    if (!address) return false
+    try {
+      const hasOrder = await readContract(config, {
+        address: REALIA_ADDRESS,
+        abi: RealiaABI.abi,
+        functionName: "hasOrder",
+        args: [address, ORDER_TYPE_MINT],
+      })
+      // Solidity returns a boolean
+      return !!hasOrder
+    } catch (err) {
+      console.error("Failed to check hasOrder:", err)
+      return false
+    }
+  }
+
+  // Approve full price to contract
   const handleApprove = async () => {
     try {
-      setStatus("Approving PYUSD...");
-      const tx = await writeApprove({
+      setStatus("Approving PYUSD for mint...")
+      await writeApprove({
         address: PYUSD_ADDRESS,
         abi: ERC20ABI,
         functionName: "approve",
-        args: [REALIA_ADDRESS, parseUnits("1", 6)], // MINT_PRICE = 1e6 (6 decimals)
-      });
-      setStatus(`Approved! Tx: ${tx}`);
+        args: [REALIA_ADDRESS, parseUnits(MINT_PRICE, 6)], // 6 decimals for PYUSD
+      })
+      setStatus("Approve succeeded.")
     } catch (err) {
-      console.error(err);
-      setStatus("Approval failed ❌");
+      console.error("Approve failed:", err)
+      setStatus("Approval failed ❌")
+      throw err
     }
-  };
+  }
 
+  // Use writeContract directly: For createOrder.
   const handleCreateOrder = async () => {
     try {
-      setStatus("Creating order...");
+      setStatus("Creating order in contract...")
       const { request } = await simulateContract(config, {
         address: REALIA_ADDRESS,
         abi: RealiaABI.abi,
         functionName: "createOrder",
-        args: [0],
+        args: [ORDER_TYPE_MINT],
         account: address,
-      });
-      const tx = await writeContract(config, request);
-
-      setStatus(`Order created! Tx: ${tx}`);
-
+      })
+      await writeContract(config, request)
+      setStatus("Order creation tx sent.")
+      return true
     } catch (err) {
-      console.error(err);
-      setStatus("Order creation failed ❌");
+      console.error("Order create failed:", err)
+      setStatus("Order creation failed ❌")
+      throw err
     }
-  };
+  }
 
   const handleMint = async () => {
     if (!file) {
-      toast.error("Please upload an image.");
-      return;
+      toast.error("Please upload an image.")
+      return
     }
-    let message: string;
-    let signature: string;
     if (!address) {
-      toast.error("Wallet not connected");
-      return;
+      toast.error("Wallet not connected")
+      return
     }
 
-    setMinting(true);
+    setMinting(true)
+    setStatus("")
+    let message: string
+    let signature: string
 
     try {
-      // Gather form values
-      // You should get name/description from UI input fields. Here, it's hardcoded for demonstration.
-      const name = "NFT Title";
-      const description = "NFT Description";
+      // Dummy values; normally get from form fields
+      const name = "NFT Title"
+      const description = "NFT Description"
 
-      // Generate message & sign with user's wallet
-      message = `I am signing this message to verify my ownership of this wallet and approve minting my NFT on MyProject.\nTimestamp: ${Date.now()}`;
-      signature = await signMessage(config, { message });
+      // 1. Sign
+      message = `I am signing this message to verify my ownership of this wallet and approve minting my NFT on MyProject.\nTimestamp: ${Date.now()}`
+      signature = await signMessage(config, { message })
 
-      // Approve PYUSD spend and create order before minting
-      await handleApprove();
-      await handleCreateOrder();
+      // 2. Approve tokens (ERC20.allowance is not checked here, just attempt always)
+      try {
+        await handleApprove()
+      } catch (approveErr) {
+        toast.error("ERC20 Approve failed (user denied or contract issue)")
+        return
+      }
 
-      // Compose form data for backend
+      // 3. Ensure there's an order of OrderType.MINT; if not, create one
+      let hasOrder = false
+      try {
+        hasOrder = await hasMintOrder()
+      } catch {
+        hasOrder = false
+      }
+      if (!hasOrder) {
+        try {
+          await handleCreateOrder()
+        } catch (orderErr) {
+          toast.error("Failed to create order on contract, check wallet confirmation and balance")
+          return
+        }
+      } else {
+        setStatus("Order already present, proceeding to mint...")
+      }
+
+      // 4. Prepare backend call
       const dataToSend = {
         name,
         description,
         message,
-        signature
-      };
+        signature,
+      }
 
-      const formData = new FormData();
-      formData.append("image", file);
-      formData.append("data", JSON.stringify(dataToSend));
+      const formData = new FormData()
+      formData.append("image", file)
+      formData.append("data", JSON.stringify(dataToSend))
 
-      // POST to backend /mint
-      const res = await api.post('/mint', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // 5. POST to backend (likely triggers contract mint from backend as owner)
+      let res
+      try {
+        res = await api.post("/mint", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        })
+      } catch (apiErr: any) {
+        setStatus("Backend minting failed")
+        console.error("API POST error:", apiErr)
+        toast.error(
+          apiErr?.response?.data?.error
+            ? apiErr.response.data.error
+            : "Backend minting failed"
+        )
+        return
+      }
 
       if (res?.data && res.data.success) {
-        setMinted(res.data);
-        toast.success("NFT Minted Successfully!");
+        setMinted(res.data)
+        toast.success("NFT Minted Successfully!")
       } else if (res?.data?.error) {
-        toast.error(res.data.error || "Failed to mint NFT");
+        toast.error(res.data.error || "Failed to mint NFT")
       } else {
-        toast.error("Failed to mint NFT (Unknown error)");
+        toast.error("Failed to mint NFT (Unknown error)")
       }
-
     } catch (error: any) {
-      console.error("Mint error:", error);
+      // This catches general logic/signature failures
+      console.error("Mint error:", error)
       if (error?.response?.data?.error) {
-        toast.error(error.response.data.error);
+        toast.error(error.response.data.error)
       } else {
-        toast.error("Failed to mint NFT");
+        toast.error("Failed to mint NFT")
       }
     } finally {
-      setMinting(false);
+      setMinting(false)
     }
   }
 
@@ -147,6 +206,7 @@ export default function MintPage() {
     setMinted(null)
     setFile(null)
     setPreview(null)
+    setStatus("")
   }
 
   return (
@@ -191,12 +251,18 @@ export default function MintPage() {
               <CardTitle className="text-base">Mint NFT</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {status && <div className="text-xs text-gray-500">{status}</div>}
+
               {!preview && (
-                <div className="text-sm text-muted-foreground">Select an image to mint your NFT.</div>
+                <div className="text-sm text-muted-foreground">
+                  Select an image to mint your NFT.
+                </div>
               )}
 
               {preview && !minted && (
-                <div className="text-sm text-muted-foreground">Ready to mint your authenticity NFT.</div>
+                <div className="text-sm text-muted-foreground">
+                  Ready to mint your authenticity NFT.
+                </div>
               )}
 
               {minted && (
