@@ -40,3 +40,15 @@ def get_embeddings(uri):
     r = requests.post("https://embedding.furqaannabi.com/get_image_embedding", json=payload)
     embedding = r.json()["embedding"]
     return embedding
+
+def get_point_count():
+    r = requests.get(f"{BASE_URL}/collections/realia",
+                     headers={"api-key": QDRANT_API_KEY})
+    if r.status_code == 200:
+        return r.json()["result"]["points_count"]
+    return 0
+
+def point_exists(point_id):
+    r = requests.get(f"{BASE_URL}/collections/realia/points/{point_id}",
+                     headers={"api-key": QDRANT_API_KEY})
+    return r.status_code == 200
