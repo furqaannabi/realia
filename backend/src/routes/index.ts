@@ -34,7 +34,7 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             return;
         }
 
-        const validationResult = mintNFTSchema.safeParse(JSON.parse(req.body));
+        const validationResult = mintNFTSchema.safeParse(JSON.parse(req.body.data));
         if (!validationResult.success) {
             res.status(400).json({
                 error: 'Validation failed',
