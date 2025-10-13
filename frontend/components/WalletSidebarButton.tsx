@@ -3,7 +3,7 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useDisconnect } from 'wagmi';
 import { useEffect, useCallback, useRef } from 'react';
-import getNonce from "@/app/utils/web3";
+import getNonce from "@/app/utils/web3/web3";
 import { signMessage } from '@wagmi/core';
 import { config } from '@/app/utils/wallet';
 import { api } from "@/app/utils/axiosInstance";

@@ -1,0 +1,29 @@
+import requests, json, uuid
+import os
+
+BASE_URL = os.getenv("QDRANT_BASE_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+
+def ensure_qdrant_collection():
+    r = requests.get(f"{BASE_URL}/collections/realia", headers={"api-key": QDRANT_API_KEY})
+    if r.status_code != 200:
+        payload = {"vectors": {"size": 512, "distance": "Cosine"}}
+        res = requests.put(f"{BASE_URL}/collections/realia", headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY}, data=json.dumps(payload))
+        return "created"
+    else:
+        return "already exists"
+
+def create_point(vector, payload=None):
+    id = uuid.uuid4()
+    data = {"points": [{"id": id, "vector": vector, "payload": payload or {}}]}
+    r = requests.put(f"{BASE_URL}/collections/realia/points",
+                     headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
+                     data=json.dumps(data))
+    return r.json()
+
+def search_points(vector, limit=5):
+    data = {"vector": vector, "limit": limit}
+    r = requests.post(f"{BASE_URL}/collections/realia/points/search",
+                      headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
+                      data=json.dumps(data))
+    return r.json()

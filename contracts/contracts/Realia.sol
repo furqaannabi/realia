@@ -30,6 +30,8 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   struct Agent {
+    string agentAddress;
+    address evmAddress;
     uint256 verifiedCount;
     bool isStaked;
   }
@@ -167,16 +169,16 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     return false;
   }
 
-  function registerAgent() external {
+  function registerAgent(string calldata agentAddress) external {
     PYUSD.transferFrom(msg.sender, address(this), MIN_AGENT_STAKING);
-    agents[msg.sender] = Agent(0, true);
+    agents[msg.sender] = Agent(agentAddress, msg.sender, 0, true);
     agentAddresses.push(msg.sender);
     emit AgentRegistered(msg.sender);
   }
 
   function unregisterAgent() external {
     PYUSD.transfer(msg.sender, MIN_AGENT_STAKING);
-    agents[msg.sender] = Agent(0, false);
+    delete agents[msg.sender];
     for (uint256 i = 0; i < agentAddresses.length; i++) {
       if (agentAddresses[i] == msg.sender) {
         agentAddresses[i] = agentAddresses[agentAddresses.length - 1];
@@ -190,7 +192,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   function _slashAgent(address agent) internal {
     PYUSD.transfer(owner(), MIN_AGENT_STAKING * PROTOCOL_FEE_PERCENTAGE / 100);
     _payAgents(OrderType.VERIFY, getTopFiveAgents(), true);
-    agents[agent] = Agent(0, false);
+    delete agents[agent];
     for (uint256 i = 0; i < agentAddresses.length; i++) {
            if (agentAddresses[i] == agent) {
         agentAddresses[i] = agentAddresses[agentAddresses.length - 1];

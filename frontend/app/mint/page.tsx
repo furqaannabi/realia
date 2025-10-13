@@ -10,7 +10,13 @@ import { StepBadge } from "@/components/step-badge"
 import { toast } from "sonner"
 import { api } from "../utils/axiosInstance"
 import { Loader2 } from "lucide-react"
-
+import { useAccount, useWriteContract } from "wagmi"
+import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../utils/config"
+import { erc20Abi, parseUnits } from "viem"
+import RealiaABI from "@/app/utils/web3/Realia.json";
+import ERC20ABI from "@/app/utils/web3/ERC20.json";
+import { signMessage, simulateContract, writeContract } from "@wagmi/core"
+import { config } from "../utils/wallet"
 type MintInfo = {
   id: string
   imageHash: string
@@ -23,33 +29,111 @@ export default function MintPage() {
   const [file, setFile] = useState<File | null>(null)
   const [minted, setMinted] = useState<MintInfo | null>(null)
   const [minting, setMinting] = useState(false)
+  const [status, setStatus] = useState<string>("");
+
+  const { address } = useAccount();
+  const { writeContractAsync: writeApprove } = useWriteContract();
+
+  // --- step 1: Approve PYUSD spend ---
+  const handleApprove = async () => {
+    try {
+      setStatus("Approving PYUSD...");
+      const tx = await writeApprove({
+        address: PYUSD_ADDRESS,
+        abi: ERC20ABI,
+        functionName: "approve",
+        args: [REALIA_ADDRESS, parseUnits("1", 6)], // MINT_PRICE = 1e6 (6 decimals)
+      });
+      setStatus(`Approved! Tx: ${tx}`);
+    } catch (err) {
+      console.error(err);
+      setStatus("Approval failed ❌");
+    }
+  };
+
+  const handleCreateOrder = async () => {
+    try {
+      setStatus("Creating order...");
+      const { request } = await simulateContract(config, {
+        address: REALIA_ADDRESS,
+        abi: RealiaABI.abi,
+        functionName: "createOrder",
+        args: [0],
+        account: address,
+      });
+      const tx = await writeContract(config, request);
+
+      setStatus(`Order created! Tx: ${tx}`);
+
+    } catch (err) {
+      console.error(err);
+      setStatus("Order creation failed ❌");
+    }
+  };
+
   const handleMint = async () => {
     if (!file) return
-    console.log("minting")
+    // Generate a nonce (message) to sign
+    let message: string;
+    let signature: string;
+    try {
+      if (!address) throw new Error("Wallet not connected");
+      message = "Minting Realia NFT";
+      signature = await signMessage(config, { message });
+    } catch (err) {
+      toast.error("Error signing message");
+      setMinting(false);
+      return;
+    }
     try {
       setMinting(true)
-      const formdata = new FormData();
-      formdata.append("image", file)
-      formdata.append("name", "NFT#1")
-      formdata.append("description", "NFT #1")
+      const textData = {
+        name: "title",
+        ticker: "sym",
+        description: "Desc",
+        message,
+        signature,
+      };
 
-      const res = await api.post('/mint', formdata)
+      // According to backend requirements: image in req.file, not in JSON
+      const formData = new FormData()
+      formData.append("image", file)
+      formData.append("data", JSON.stringify(textData))
+
+      await handleApprove()
+
+      await handleCreateOrder()
+
+      const res = await api.post('/mint', formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      })
 
       console.log(res.data)
+
+      // If backend returns the minted info, update UI
+      if (res.data) {
+        setMinted(res.data)
+        toast.success("NFT Minted Successfully!")
+      }
+
     } catch (error: any) {
       console.log(error)
       toast.error(error?.response?.data?.error)
       setMinting(false)
+
     } finally {
       setMinting(false)
     }
   }
+
   useEffect(() => {
     if (file) {
       const url = URL.createObjectURL(file)
       setPreview(url)
     }
-  }, [])
+  }, [file])
   const resetMint = () => {
     setMinted(null)
     setFile(null)
@@ -136,10 +220,10 @@ export default function MintPage() {
           <div className="flex items-center gap-3">
             {!minted ? (
               <GradientButton
-                disabled={!file && minting}
+                disabled={!file || minting}
                 onClick={handleMint}
               >
-               {minting ? <Loader2 className="animate-spin"/> : "Mint Authenticity NFT" } 
+                {minting ? <Loader2 className="animate-spin" /> : "Mint Authenticity NFT"}
               </GradientButton>
             ) : (
               <Button
