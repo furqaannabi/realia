@@ -18,6 +18,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   uint256 public verificationId = 0;
 
   enum OrderType {
+    NONE,
     MINT,
     VERIFY
   }
@@ -128,6 +129,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
 
   function createOrder(OrderType orderType) external {
     require(!hasOrder(msg.sender, orderType), "User already has an order");
+    require(orderType != OrderType.NONE, "Invalid order type");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     PYUSD.transferFrom(msg.sender, address(this), amount);
     orders[msg.sender].push(Order(orderType, amount, false, false));
@@ -136,6 +138,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
 
   function cancelOrder(OrderType orderType) external {
     require(hasOrder(msg.sender, orderType), "User does not have an order");
+    require(orderType != OrderType.NONE, "Invalid order type");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
     PYUSD.transfer(msg.sender, amount);
     for (uint256 i = 0; i < orders[msg.sender].length; i++) {
@@ -159,7 +162,8 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     return false;
   }
 
-  function hasOrder(address user, OrderType orderType) public view returns (bool) {
+  function hasOrder(address user, OrderType orderType) public view returns (bool) { 
+    require(orderType != OrderType.NONE, "Invalid order type");
     for (uint256 i = 0; i < orders[user].length; i++) {
       Order memory order = orders[user][i];
       if (order.orderType == orderType && order.used == false && order.cancelled == false) {
