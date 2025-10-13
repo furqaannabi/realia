@@ -1,8 +1,8 @@
 import { realia_contract } from "../web3/config";
 
 export enum OrderType {
-    MINT = "MINT",
-    VERIFY = "VERIFY"
+    MINT = 0,
+    VERIFY = 1
 }
 
 /**
