@@ -1,4 +1,4 @@
-import requests, json, uuid
+import requests, json
 import os
 
 BASE_URL = os.getenv("QDRANT_BASE_URL")
@@ -13,8 +13,7 @@ def ensure_qdrant_collection():
     else:
         return "already exists"
 
-def create_point(vector, payload=None):
-    id = uuid.uuid4()
+def create_point(id, vector, payload=None):
     data = {"points": [{"id": id, "vector": vector, "payload": payload or {}}]}
     r = requests.put(f"{BASE_URL}/collections/realia/points",
                      headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
