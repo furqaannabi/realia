@@ -8,11 +8,11 @@ import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ER
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
-  uint256 constant MINT_PRICE = 1e6;
-  uint256 constant VERIFY_PRICE = 5e4;
-  uint256 constant MIN_AGENT_STAKING = 5e4;
-  uint256 constant PROTOCOL_FEE_PERCENTAGE = 10;
-  uint256 constant REQUIRED_VERIFICATIONS = 5;
+  uint256 constant public MINT_PRICE = 1e6;
+  uint256 constant public VERIFY_PRICE = 5e4;
+  uint256 constant public MIN_AGENT_STAKING = 5e4;
+  uint256 constant public PROTOCOL_FEE_PERCENTAGE = 10;
+  uint256 constant public REQUIRED_VERIFICATIONS = 5;
   IERC20 public constant PYUSD = IERC20(0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1);
   uint256 public tokenId = 0;
   uint256 public verificationId = 0;

@@ -5,7 +5,6 @@ import asyncio
 import os
 from web3 import Web3
 from uagents import Agent, Context
-from pydantic import BaseModel
 from qdrant import ensure_qdrant_collection, create_point, search_points, get_embeddings, point_exists
 from abi import REALIA_ABI, ERC20_ABI, VerificationResult
 # --- Setup ---
@@ -16,12 +15,6 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL")
 AGENT_PRIVATE_KEY = os.getenv("AGENT_PRIVATE_KEY")
-
-if not ALCHEMY_API_KEY or not CONTRACT_ADDRESS or not SEED or not QDRANT_API_KEY or not QDRANT_BASE_URL or not EMBEDDING_URL:
-    raise ValueError("Missing environment variables")
-
-if not AGENT_PRIVATE_KEY:
-    raise ValueError("AGENT_PRIVATE_KEY is required for agent registration")
 
 w3 = Web3(Web3.HTTPProvider(f"https://arb-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"))
 contract = w3.eth.contract(address=CONTRACT_ADDRESS, abi=REALIA_ABI)
@@ -75,8 +68,8 @@ async def check_and_register_agent(ctx: Context):
             'gasPrice': w3.eth.gas_price
         })
         signed_approve = agent_account.sign_transaction(approve_tx)
-        approve_hash = w3.eth.send_raw_transaction(signed_approve.rawTransaction)
-        approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash)
+        approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
+        w3.eth.wait_for_transaction_receipt(approve_hash)
         ctx.logger.info(f"✓ Approval transaction: {approve_hash.hex()}")
         
         # Register agent
@@ -88,8 +81,8 @@ async def check_and_register_agent(ctx: Context):
             'gasPrice': w3.eth.gas_price
         })
         signed_register = agent_account.sign_transaction(register_tx)
-        register_hash = w3.eth.send_raw_transaction(signed_register.rawTransaction)
-        register_receipt = w3.eth.wait_for_transaction_receipt(register_hash)
+        register_hash = w3.eth.send_raw_transaction(signed_register.raw_transaction)
+        w3.eth.wait_for_transaction_receipt(register_hash)
         ctx.logger.info(f"✓ Registration transaction: {register_hash.hex()}")
         ctx.logger.info(f"🎉 Agent successfully registered!")
         
@@ -223,7 +216,6 @@ async def handle_verification(ctx: Context, request_id: int):
         
         # Get verification request details from blockchain
         verification_req = contract.functions.verificationRequests(request_id).call()
-        user_address = verification_req[0]
         verification_uri = verification_req[1]
         is_processed = verification_req[2]
         
@@ -285,8 +277,8 @@ async def handle_verification(ctx: Context, request_id: int):
         })
         
         signed_response = agent_account.sign_transaction(response_tx)
-        response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
-        response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
+        response_hash = w3.eth.send_raw_transaction(signed_response.raw_transaction)
+        w3.eth.wait_for_transaction_receipt(response_hash)
         
         ctx.logger.info(f"✓ Response submitted! TX: {response_hash.hex()}")
         ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
@@ -295,5 +287,3 @@ async def handle_verification(ctx: Context, request_id: int):
         ctx.logger.error(f"Failed to handle verification #{request_id}: {e}")
         import traceback
         ctx.logger.error(traceback.format_exc())
-
-agent.run()
