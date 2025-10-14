@@ -13,8 +13,8 @@ CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
 SEED = os.getenv("SEED")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
-
-if not ALCHEMY_API_KEY or not CONTRACT_ADDRESS or not SEED or not QDRANT_API_KEY or not QDRANT_BASE_URL:
+EMBEDDING_URL = os.getenv("EMBEDDING_URL")
+if not ALCHEMY_API_KEY or not CONTRACT_ADDRESS or not SEED or not QDRANT_API_KEY or not QDRANT_BASE_URL or not EMBEDDING_URL:
     raise ValueError("Missing environment variables")
 
 ABI = [

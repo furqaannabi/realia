@@ -47,6 +47,7 @@ model Image {
   ipfsCid String @unique
   s3Key String @unique
   metadataCid String @unique
+  qdrantId String @unique
   metadata Json
   nft NFT[]
   verification Verification[]
