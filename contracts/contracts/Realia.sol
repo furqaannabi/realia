@@ -43,10 +43,17 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     bool processed;
     uint256 requestTime;
   }
+  
+  enum VerificationResult {
+    NONE,
+    VERIFIED,
+    MODIFIED,
+    NOT_VERIFIED
+  }
 
   struct VerificationResponse {
     address agent;
-    bool verified;
+    VerificationResult result;
     uint256 tokenId;
     uint256 responseTime;
   }
@@ -222,11 +229,12 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     emit VerificationRequested(user, verificationId);
   }
 
-  function responseVerification(uint256 requestId, bool verified, uint256 propertyTokenId) external {
+  function responseVerification(uint256 requestId, VerificationResult result, uint256 propertyTokenId) external {
     require(agents[msg.sender].isStaked, "Agent is not staked");
     require(verificationRequests[requestId].processed == false, "Request is already processed");
-    verificationResponses[requestId].push(VerificationResponse(msg.sender, verified, propertyTokenId, block.timestamp));
-    emit VerificationResponseByAgent(msg.sender, requestId, verified);
+    require(result != VerificationResult.NONE, "Invalid verification result");
+    verificationResponses[requestId].push(VerificationResponse(msg.sender, result, propertyTokenId, block.timestamp));
+    emit VerificationResponseByAgent(msg.sender, requestId, result == VerificationResult.VERIFIED);
     if (verificationResponses[requestId].length >= REQUIRED_VERIFICATIONS) {
       _processVerification(requestId);
     }
@@ -238,6 +246,8 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     
     VerificationResponse[] memory responses = verificationResponses[requestId];
     uint256 verifiedCount = 0;
+    uint256 modifiedCount = 0;
+    uint256 notVerifiedCount = 0;
     
     uint256[] memory uniqueTokenIds = new uint256[](responses.length);
     uint256[] memory voteCounts = new uint256[](responses.length);
@@ -245,8 +255,9 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     uint256 uniqueCount = 0;
     uint256 agentsToPayCount = 0;
     
+    // Count votes for each result type and track token IDs
     for (uint256 i = 0; i < responses.length; i++) {
-      if (responses[i].verified) {
+      if (responses[i].result == VerificationResult.VERIFIED) {
         verifiedCount++;
         
         bool found = false;
@@ -262,12 +273,18 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
           voteCounts[uniqueCount] = 1;
           uniqueCount++;
         }
+      } else if (responses[i].result == VerificationResult.MODIFIED) {
+        modifiedCount++;
+      } else if (responses[i].result == VerificationResult.NOT_VERIFIED) {
+        notVerifiedCount++;
       }
     }
     
+    // Determine overall result based on majority vote
     bool isVerified = verifiedCount > (REQUIRED_VERIFICATIONS / 2);
     
     if (isVerified) {
+      // Find the most voted token ID
       uint256 mostVotedTokenId = 0;
       uint256 maxVotes = 0;
       
@@ -280,8 +297,9 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
       
       emit Verified(verificationRequests[requestId].user, mostVotedTokenId);
       
+      // Reward agents who agreed with the majority
       for (uint256 i = 0; i < responses.length; i++) {
-        if (!responses[i].verified || responses[i].tokenId != mostVotedTokenId) {
+        if (responses[i].result != VerificationResult.VERIFIED || responses[i].tokenId != mostVotedTokenId) {
           _slashAgent(responses[i].agent);
         } else {
           agents[responses[i].agent].verifiedCount++;
@@ -290,8 +308,9 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
         }
       }
     } else {
+      // Not verified - reward agents who voted NOT_VERIFIED or MODIFIED
       for (uint256 i = 0; i < responses.length; i++) {
-        if (responses[i].verified) {
+        if (responses[i].result == VerificationResult.VERIFIED) {
           _slashAgent(responses[i].agent);
         } else {
           agents[responses[i].agent].verifiedCount++;
