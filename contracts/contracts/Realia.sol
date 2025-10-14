@@ -74,6 +74,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   event ProcessedVerification(uint256 requestId);
   event AgentRegistered(address agent);
   event AgentUnregistered(address agent);
+  event AgentAddressUpdated(address agent, string agentAddress);
   event AgentsPaid(uint256 amount, uint256 amountPerAgent);
   event OrderCancelled(address to, OrderType orderType, uint256 amount);
   function mint(address to, string memory uri) external onlyOwner {
@@ -188,13 +189,21 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   }
 
   function registerAgent(string calldata agentAddress) external {
+    require(agents[msg.sender].isStaked == false, "Agent already registered");
     PYUSD.transferFrom(msg.sender, address(this), MIN_AGENT_STAKING);
     agents[msg.sender] = Agent(agentAddress, msg.sender, 0, true);
     agentAddresses.push(msg.sender);
     emit AgentRegistered(msg.sender);
   }
 
+  function updateAgentAddress(string calldata agentAddress) external {
+    require(agents[msg.sender].isStaked == true, "Agent not registered");
+    agents[msg.sender].agentAddress = agentAddress;
+    emit AgentAddressUpdated(msg.sender, agentAddress);
+  }
+
   function unregisterAgent() external {
+    require(agents[msg.sender].isStaked == true, "Agent not registered");
     PYUSD.transfer(msg.sender, MIN_AGENT_STAKING);
     delete agents[msg.sender];
     for (uint256 i = 0; i < agentAddresses.length; i++) {
