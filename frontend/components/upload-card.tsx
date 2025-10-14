@@ -1,23 +1,22 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 
 export function UploadCard({
-  preview,
   onChange,
   className,
 }: {
-  preview: string | null
-  onChange: (url: string | null) => void
+  onChange: (url: File | null) => void
   className?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-
+  const [preview, setPreview] = useState<string | null>()
   const onFile = (file: File) => {
     const url = URL.createObjectURL(file)
-    onChange(url)
+    setPreview(url)
+    onChange(file)
   }
 
   return (

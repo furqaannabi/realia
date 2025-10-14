@@ -1,5 +1,5 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { base, arbitrum, mainnet, optimism, polygon } from 'wagmi/chains';
+import { base, arbitrum, arbitrumSepolia, mainnet, optimism, polygon } from 'wagmi/chains';
 import {
   injectedWallet,
   metaMaskWallet,
@@ -12,7 +12,7 @@ import {
 export const config = getDefaultConfig({
   appName: 'Realia',
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID!,
-  chains: [mainnet, polygon, optimism, arbitrum, base],
+  chains: [arbitrumSepolia], // ONLY use arbitrum testnet
   ssr: false, // If your dApp uses server side rendering (SSR)
   wallets: [
     {
