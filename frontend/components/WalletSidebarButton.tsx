@@ -1,8 +1,91 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount, useDisconnect } from 'wagmi';
+import { useEffect, useCallback, useRef } from 'react';
+import getNonce from "@/app/utils/web3/web3";
+import { signMessage } from '@wagmi/core';
+import { config } from '@/app/utils/wallet';
+import { api } from "@/app/utils/axiosInstance";
+import useAuth from "@/app/store";
+import { getCurrentUser } from "./Provider";
+import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 export function WalletSidebarButton() {
+  const { isDisconnected, isConnected, address } = useAccount();
+  const { user, updateUser } = useAuth((state) => state)
+  const disconnect = useDisconnect()
+
+  // Use a ref to track last connection status so we can catch disconnect events
+  const wasConnected = useRef(isConnected);
+
+  const login = async () => {
+    try {
+      const nonce = await getNonce(address as `0x${string}`)
+      console.log(nonce)
+      const signature = await signMessage(config, { message: nonce })
+
+      const res = await api.post('/auth/connect', {
+        address,
+        message: nonce,
+        signature
+      })
+
+      toast.success("User Authenticated Successfully")
+      return res.data;
+
+    } catch (error: any) {
+      console.log("Login error: ", error)
+      toast.error(error?.response?.data.error)
+    }
+  }
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout');
+      console.log("logout")
+    } catch (e) {
+      // optional: toast or log error
+    }
+    updateUser(null);
+  }, [updateUser]);
+
+  // Watch for disconnect (i.e. when user clicks the RainbowKit disconnect button)
+  useEffect(() => {
+    // if user was connected and now isn't, log out
+    if (wasConnected.current && !isConnected) {
+      handleLogout();
+    }
+    wasConnected.current = isConnected;
+    // purposely not handling login here to avoid multiple triggers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, handleLogout]);
+
+  useEffect(() => {
+    const setUser = async () => {
+      try {
+        const user = await getCurrentUser()
+
+        if (user) {
+          console.log("Fetch User", user)
+          updateUser(user)
+        }
+      } catch (error: any) {
+        if (isConnected) {
+          console.log("Login")
+          login()
+        }
+        toast.error(error?.response?.data?.error)
+      }
+    }
+    setUser()
+  }, [updateUser, isConnected])
+
+  useEffect(() => {
+    console.log(user)
+  }, [user])
+
   return (
     <div className="w-full">
       <div className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer rounded-md p-2 flex justify-center items-center overflow-hidden transition-colors duration-200">
@@ -64,8 +147,8 @@ export function WalletSidebarButton() {
                       >
                         <span className="truncate text-primary-foreground max-w-[100px]">{account.displayName}</span>
                         <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4 text-primary" aria-hidden="true">
-                          <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5"/>
-                          <path d="M7 10.5L9 12.5L13 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M7 10.5L9 12.5L13 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                       <button
@@ -77,9 +160,9 @@ export function WalletSidebarButton() {
                         <span className="truncate max-w-[70px]">{chain.name}</span>
                         {chain.unsupported && (
                           <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4 text-red-600" aria-hidden="true">
-                            <path d="M10 4V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="10" cy="15" r="1" fill="currentColor"/>
-                            <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5"/>
+                            <path d="M10 4V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="10" cy="15" r="1" fill="currentColor" />
+                            <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5" />
                           </svg>
                         )}
                       </button>
