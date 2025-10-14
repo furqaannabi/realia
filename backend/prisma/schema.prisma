@@ -44,10 +44,10 @@ enum ImageType {
 
 model Image {
   id String @id @default(uuid())
-  ipfsCid String @unique
-  s3Key String @unique
-  metadataCid String @unique
-  qdrantId String @unique
+  ipfsCid String
+  s3Key String
+  metadataCid String
+  qdrantId String @unique @default(uuid())
   metadata Json
   nft NFT[]
   verification Verification[]

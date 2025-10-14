@@ -5,16 +5,18 @@ import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { verifyMessage } from 'ethers';
 import { sessionMiddleware } from '../middleware/session';
-import { uploadMedia, getAIOrOriginalUrl } from '../services/media';
+import { uploadMedia, getAIOrOriginalUrl, getEmbedding } from '../services/media';
 import { mintNFT, hasOrder, OrderType, requestVerification } from '../services/blockchain';
 import prisma from '../clients/prisma';
-import { 
-    createNonceSchema, 
-    connectWalletSchema, 
-    mintNFTSchema, 
-    tokenIdParamSchema 
+import {
+    createNonceSchema,
+    connectWalletSchema,
+    mintNFTSchema,
+    tokenIdParamSchema
 } from '../types/zod';
 import { ImageType } from '../generated/prisma';
+import qdrantClient from '../clients/qdrant';
+import { v4 as uuidv4 } from 'uuid';
 
 
 const router = Router();
@@ -45,6 +47,21 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
 
         const { name, description } = validationResult.data;
 
+        const embedding = await getEmbedding(req.file.buffer);
+
+        const similarImages = await qdrantClient.query("images", {
+            query: embedding,
+            params: {
+                hnsw_ef: 128,
+                exact: false,
+            },
+            limit: 5,
+        });
+        if (similarImages.points.filter((image: any) => image.score > 0.94).length > 0) {
+            res.status(400).json({ error: 'Image already exists' });
+            return;
+        }
+
         const isAI = await getAIOrOriginalUrl(req.file.buffer);
         if (isAI) {
             res.status(400).json({ error: 'Image is AI generated' });
@@ -72,18 +89,26 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             return;
         }
 
+        const qdrantId = uuidv4();
+
+        await qdrantClient.upsert("images", {
+            points: [
+                { id: qdrantId, vector: embedding }
+            ]
+        });
+
         const nft = await prisma.nFT.create({
             data: {
                 tokenId,
                 user: { connect: { id: req.user.id } },
-                image: { create: { ipfsCid: media.imageCid, s3Key: media.key, metadataCid: media.metadataCid, metadata: metadata as any, type: ImageType.NFT } }
+                image: { create: { ipfsCid: media.imageCid, s3Key: media.key, metadataCid: media.metadataCid, metadata: metadata as any, type: ImageType.NFT, qdrantId: qdrantId } }
             },
             include: {
                 image: true
             }
         });
 
-        res.status(201).json({ 
+        res.status(201).json({
             success: true,
             nft,
             tokenId,
@@ -128,7 +153,7 @@ router.post('/verify', sessionMiddleware, upload.single('image') as any, async (
             res.status(500).json({ error: 'Failed to request verification' });
             return;
         }
-         await prisma.verification.create({
+        await prisma.verification.create({
             data: {
                 verificationId,
                 user: { connect: { id: req.user.id } },
@@ -188,7 +213,7 @@ router.get('/nfts/:tokenId', async (req: Request, res: Response) => {
 
         const nft = await prisma.nFT.findUnique({
             where: { tokenId },
-            include: { 
+            include: {
                 image: true,
                 user: {
                     select: {
@@ -396,9 +421,9 @@ router.post('/auth/connect', async (req: Request, res: Response) => {
  */
 router.post('/auth/logout', sessionMiddleware, async (req: Request, res: Response) => {
     try {
-            await prisma.session.deleteMany({
-                where: { userId: req.user.id }
-            });
+        await prisma.session.deleteMany({
+            where: { userId: req.user.id }
+        });
 
         res.clearCookie('token', {
             httpOnly: true,

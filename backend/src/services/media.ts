@@ -4,6 +4,10 @@ import { s3Client } from "../clients/s3";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+if (!process.env.EMBEDDING_URL) {
+    throw new Error("EMBEDDING_URL is not set");
+}
+
 type Media = {
     metadataCid: string;
     imageCid: string;
@@ -64,3 +68,11 @@ export const getAIOrOriginalUrl = async (buffer: Buffer): Promise<boolean> => {
     }*/
     return false;
 };
+
+export const getEmbedding = async (buffer: Buffer): Promise<number[]> => {
+    const response = await axios.post(process.env.EMBEDDING_URL!, {
+        image: buffer.toString('base64'),
+    });
+    return response.data.embedding;
+};
+
