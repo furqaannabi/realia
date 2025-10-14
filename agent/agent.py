@@ -68,7 +68,7 @@ async def check_and_register_agent(ctx: Context):
             'gasPrice': w3.eth.gas_price
         })
         signed_approve = agent_account.sign_transaction(approve_tx)
-        approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
+        approve_hash = w3.eth.send_raw_transaction(signed_approve.rawTransaction)
         w3.eth.wait_for_transaction_receipt(approve_hash)
         ctx.logger.info(f"✓ Approval transaction: {approve_hash.hex()}")
         
@@ -81,7 +81,7 @@ async def check_and_register_agent(ctx: Context):
             'gasPrice': w3.eth.gas_price
         })
         signed_register = agent_account.sign_transaction(register_tx)
-        register_hash = w3.eth.send_raw_transaction(signed_register.raw_transaction)
+        register_hash = w3.eth.send_raw_transaction(signed_register.rawTransaction)
         w3.eth.wait_for_transaction_receipt(register_hash)
         ctx.logger.info(f"✓ Registration transaction: {register_hash.hex()}")
         ctx.logger.info(f"🎉 Agent successfully registered!")
@@ -277,7 +277,7 @@ async def handle_verification(ctx: Context, request_id: int):
         })
         
         signed_response = agent_account.sign_transaction(response_tx)
-        response_hash = w3.eth.send_raw_transaction(signed_response.raw_transaction)
+        response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
         w3.eth.wait_for_transaction_receipt(response_hash)
         
         ctx.logger.info(f"✓ Response submitted! TX: {response_hash.hex()}")
