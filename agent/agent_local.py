@@ -26,7 +26,7 @@ agent_account = w3.eth.account.from_key(AGENT_PRIVATE_KEY)
 AGENT_EVM_ADDRESS = agent_account.address
 
 # --- Agent Setup ---
-agent = Agent(name="realia_agent", seed=SEED, port=8001)
+agent = Agent(name="realia_agent", seed=SEED, port=8001, mailbox=True)
 
 async def check_and_register_agent(ctx: Context):
     """Check if agent is registered, if not attempt to register"""
