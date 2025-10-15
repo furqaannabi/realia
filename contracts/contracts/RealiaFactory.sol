@@ -52,7 +52,8 @@ contract RealiaFactory is Ownable {
     }
     
     if (agentsToPayCount == 0) {
-      PYUSD.transfer(owner(), amountAfterFee);
+      // No agents to pay, send to owner
+      require(PYUSD.transfer(owner(), amountAfterFee), "Transfer to owner failed");
       emit AgentsPaid(amountAfterFee, 0);
       return;
     }
@@ -60,7 +61,7 @@ contract RealiaFactory is Ownable {
     uint256 amountPerAgent = amountAfterFee / agentsToPayCount;
     for (uint256 i = 0; i < agentsToPay.length; i++) {
       if (agents[agentsToPay[i]].isStaked) {
-        PYUSD.transfer(agentsToPay[i], amountPerAgent);
+        require(PYUSD.transfer(agentsToPay[i], amountPerAgent), "Transfer to agent failed");
       }
     }
     emit AgentsPaid(amountAfterFee, amountPerAgent);
@@ -109,7 +110,7 @@ contract RealiaFactory is Ownable {
     require(hasOrder(msg.sender, orderType), "User does not have an order");
     require(orderType != OrderType.NONE, "Invalid order type");
     uint256 amount = orderType == OrderType.MINT ? MINT_PRICE : VERIFY_PRICE;
-    PYUSD.transfer(msg.sender, amount);
+    require(PYUSD.transfer(msg.sender, amount), "Refund transfer failed");
     for (uint256 i = 0; i < orders[msg.sender].length; i++) {
       if (orders[msg.sender][i].orderType == orderType) {
         orders[msg.sender][i].cancelled = true;
@@ -124,14 +125,14 @@ contract RealiaFactory is Ownable {
       Order memory order = orders[user][i];
       if (order.orderType == orderType && order.used == false && order.cancelled == false) {
         orders[user][i].used = true;
-        PYUSD.transfer(owner(), order.amount * PROTOCOL_FEE_PERCENTAGE / 100);
+        require(PYUSD.transfer(owner(), order.amount * PROTOCOL_FEE_PERCENTAGE / 100), "Protocol fee transfer failed");
         return true;
       }
     }
     return false;
   }
 
-  function useMintOrder(address user) internal returns (bool) {
+  function useMintOrder(address user) external returns (bool) {
     require(address(realiaNFT) == msg.sender, "Not the RealiaNFT contract");
     require(hasOrder(user, OrderType.MINT), "No mint order found");
     return _useOrder(user, OrderType.MINT);
@@ -164,7 +165,7 @@ contract RealiaFactory is Ownable {
 
   function unregisterAgent() external {
     require(agents[msg.sender].isStaked == true, "Agent not registered");
-    PYUSD.transfer(msg.sender, MIN_AGENT_STAKING);
+    require(PYUSD.transfer(msg.sender, MIN_AGENT_STAKING), "Stake refund failed");
     delete agents[msg.sender];
     for (uint256 i = 0; i < agentAddresses.length; i++) {
       if (agentAddresses[i] == msg.sender) {
@@ -177,7 +178,7 @@ contract RealiaFactory is Ownable {
   }
 
   function _slashAgent(address agent) internal {
-    PYUSD.transfer(owner(), MIN_AGENT_STAKING * PROTOCOL_FEE_PERCENTAGE / 100);
+    require(PYUSD.transfer(owner(), MIN_AGENT_STAKING * PROTOCOL_FEE_PERCENTAGE / 100), "Slash transfer failed");
     _payAgents(OrderType.VERIFY, getTopFiveAgents(), true);
     delete agents[agent];
     for (uint256 i = 0; i < agentAddresses.length; i++) {
