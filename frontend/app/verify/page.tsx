@@ -192,7 +192,6 @@ export default function VerifyPage() {
                 account: address,
             })
             await writeContract(config, request)
-            return true
         } catch (err) {
             console.error("Order create failed:", err)
             throw err
@@ -340,6 +339,7 @@ export default function VerifyPage() {
             }
             if (!hasOrder) {
                 try {
+                    console.log("Creatibg Order")
                     await handleCreateOrder()
                 } catch (orderErr) {
                     setLoadingOrder(false)
