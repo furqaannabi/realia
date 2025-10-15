@@ -3,10 +3,10 @@ import realiaFactoryModule from "../ignition/modules/RealiaFactory.js";
 import realiaNFTModule from "../ignition/modules/RealiaNFT.js";
 
 async function main() {
-  const { ignition, id } = await hre.network.connect();
+  const { ignition } = await hre.network.connect();
   
   const { realiaFactory } = await ignition.deploy(realiaFactoryModule);
-  
+  console.log("RealiaFactory deployed to:", realiaFactory.address);
   const { realiaNFT } = await ignition.deploy(realiaNFTModule, {
     parameters: {
       RealiaNFTModule: {
@@ -14,7 +14,7 @@ async function main() {
       },
     },
   });
-
+  console.log("RealiaNFT deployed to:", realiaNFT.address);
   
   console.log("Setting factory address in RealiaNFT...");
   await realiaFactory.write.setRealiaNFT([realiaNFT.address]);

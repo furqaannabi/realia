@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "compile": "npx hardhat compile",
-    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network arbitrumSepolia",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network arbitrumSepolia && npm run verify:sepolia",
     "verify:sepolia": "npx hardhat ignition verify chain-421614 --network arbitrumSepolia"
   },
   "devDependencies": {

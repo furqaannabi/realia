@@ -16,12 +16,12 @@ Create a `.env` file in the `agent` directory with the following variables:
 ```env
 # Blockchain Configuration
 ALCHEMY_API_KEY=your_alchemy_api_key
-CONTRACT_ADDRESS=0x...  # Realia contract address
+REALIA_FACTORY_CONTRACT_ADDRESS=0x...  # RealiaFactory contract address
+REALIA_NFT_CONTRACT_ADDRESS=0x...      # RealiaNFT contract address
 AGENT_PRIVATE_KEY=0x...  # Private key for agent wallet (needs PYUSD for staking)
 
 # Agent Configuration
 SEED=your_agent_seed
-AGENT_ADDRESS_NAME=realia_agent  # Optional, defaults to "realia_agent"
 
 # Qdrant Configuration
 QDRANT_API_KEY=your_qdrant_api_key
