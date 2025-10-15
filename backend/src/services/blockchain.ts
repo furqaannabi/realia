@@ -1,4 +1,4 @@
-import { realia_contract } from "../web3/config";
+import { realiaFactory_contract, realiaNFT_contract } from "../web3/config";
 
 export enum OrderType {
     NONE = 0,
@@ -14,11 +14,11 @@ export enum OrderType {
  */
 export const mintNFT = async (to: string, uri: string): Promise<string | null> => {
     try {
-        const tx = await realia_contract.mint(to, uri);
+        const tx = await realiaNFT_contract.mint(to, uri);
         const receipt = await tx.wait();
         for (const log of receipt.logs) {
             try {
-              const parsed = realia_contract.interface.parseLog(log);
+              const parsed = realiaNFT_contract.interface.parseLog(log);
               if (parsed && parsed.name === "Minted") {
                 return parsed.args[1].toString();
               }
@@ -43,7 +43,7 @@ export const mintNFT = async (to: string, uri: string): Promise<string | null> =
  */
 export const hasOrder = async (user: string, orderType: OrderType): Promise<boolean> => {
     try {
-        const hasOrder = await realia_contract.hasOrder(user, orderType);
+        const hasOrder = await realiaFactory_contract.hasOrder(user, orderType);
         return hasOrder;
     } catch (error) {
         console.error(error);
@@ -59,11 +59,11 @@ export const hasOrder = async (user: string, orderType: OrderType): Promise<bool
  */
 export const requestVerification = async (user: string, uri: string): Promise<string | null> => {
     try {
-        const tx = await realia_contract.requestVerification(user, uri);
+        const tx = await realiaFactory_contract.requestVerification(user, uri);
         const receipt = await tx.wait();
         for (const log of receipt.logs) {
             try {
-                const parsed = realia_contract.interface.parseLog(log);
+                const parsed = realiaFactory_contract.interface.parseLog(log);
                 if (parsed && parsed.name === "VerificationRequested") {
                     return parsed.args[1].toString();
                 }
