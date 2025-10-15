@@ -6,10 +6,11 @@ import os
 from web3 import Web3
 from uagents import Agent, Context
 from qdrant import ensure_qdrant_collection, create_point, search_points, get_embeddings, point_exists
-from abi import REALIA_ABI, ERC20_ABI, VerificationResult
+from abi import REALIA_FACTORY_ABI, REALIA_NFT_ABI, ERC20_ABI, VerificationResult
 # --- Setup ---
 ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
-CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+FACTORY_ADDRESS = os.getenv("REALIA_FACTORY_CONTRACT_ADDRESS")
+NFT_ADDRESS = os.getenv("REALIA_NFT_CONTRACT_ADDRESS")
 SEED = os.getenv("SEED")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
@@ -17,7 +18,8 @@ EMBEDDING_URL = os.getenv("EMBEDDING_URL")
 AGENT_PRIVATE_KEY = os.getenv("AGENT_PRIVATE_KEY")
 
 w3 = Web3(Web3.HTTPProvider(f"https://arb-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"))
-contract = w3.eth.contract(address=CONTRACT_ADDRESS, abi=REALIA_ABI)
+factory_contract = w3.eth.contract(address=FACTORY_ADDRESS, abi=REALIA_FACTORY_ABI)
+nft_contract = w3.eth.contract(address=NFT_ADDRESS, abi=REALIA_NFT_ABI)
 
 # Setup agent wallet
 agent_account = w3.eth.account.from_key(AGENT_PRIVATE_KEY)
@@ -30,21 +32,42 @@ async def check_and_register_agent(ctx: Context):
     """Check if agent is registered, if not attempt to register"""
     try:
         # Check if agent is already registered
-        agent_info = contract.functions.agents(AGENT_EVM_ADDRESS).call()
+        agent_info = factory_contract.functions.agents(AGENT_EVM_ADDRESS).call()
         is_staked = agent_info[3]  # isStaked is the 4th element (index 3)
         
         if is_staked:
+            registered_agent_address = agent_info[0]  # agentAddress is the 1st element
+            current_agent_address = ctx.agent.address
+            
             ctx.logger.info(f"✓ Agent already registered: {AGENT_EVM_ADDRESS}")
-            ctx.logger.info(f"  - Agent name: {agent_info[0]}")
+            ctx.logger.info(f"  - Registered agent address: {registered_agent_address}")
+            ctx.logger.info(f"  - Current agent address: {current_agent_address}")
             ctx.logger.info(f"  - Verified count: {agent_info[2]}")
+            
+            # Check if agent address needs to be updated
+            if registered_agent_address != current_agent_address:
+                ctx.logger.warning(f"Agent address mismatch! Updating...")
+                update_tx = factory_contract.functions.updateAgentAddress(current_agent_address).build_transaction({
+                    'from': AGENT_EVM_ADDRESS,
+                    'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
+                })
+                signed_update = agent_account.sign_transaction(update_tx)
+                update_hash = w3.eth.send_raw_transaction(signed_update.rawTransaction)
+                update_receipt = w3.eth.wait_for_transaction_receipt(update_hash)
+                
+                if update_receipt['status'] != 1:
+                    raise Exception(f"Update agent address transaction failed! TX: {update_hash.hex()}")
+                
+                ctx.logger.info(f"✓ Agent address updated! TX: {update_hash.hex()}")
+            
             return True
         
         ctx.logger.warning(f"Agent not registered: {AGENT_EVM_ADDRESS}")
         ctx.logger.info("Attempting to register agent...")
         
         # Get contract constants
-        min_staking = contract.functions.MIN_AGENT_STAKING().call()
-        pyusd_address = contract.functions.PYUSD().call()
+        min_staking = factory_contract.functions.MIN_AGENT_STAKING().call()
+        pyusd_address = factory_contract.functions.PYUSD().call()
         
         # Create PYUSD contract instance
         pyusd_contract = w3.eth.contract(address=pyusd_address, abi=ERC20_ABI)
@@ -61,28 +84,42 @@ async def check_and_register_agent(ctx: Context):
         
         # Approve PYUSD for contract
         ctx.logger.info("Approving PYUSD for contract...")
-        approve_tx = pyusd_contract.functions.approve(CONTRACT_ADDRESS, min_staking).build_transaction({
+        approve_tx = pyusd_contract.functions.approve(FACTORY_ADDRESS, min_staking).build_transaction({
             'from': AGENT_EVM_ADDRESS,
-            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS),
-            'gas': 100000,
-            'gasPrice': w3.eth.gas_price
+            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
         })
         signed_approve = agent_account.sign_transaction(approve_tx)
         approve_hash = w3.eth.send_raw_transaction(signed_approve.rawTransaction)
-        w3.eth.wait_for_transaction_receipt(approve_hash)
+        approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash)
+        
+        if approve_receipt['status'] != 1:
+            raise Exception(f"Approval transaction failed! TX: {approve_hash.hex()}")
+        
         ctx.logger.info(f"✓ Approval transaction: {approve_hash.hex()}")
         
         # Register agent
         ctx.logger.info("Registering agent...")
-        register_tx = contract.functions.registerAgent(ctx.agent.address).build_transaction({
+        ctx.logger.info(f"Agent address to register: {ctx.agent.address}")
+        
+        register_tx = factory_contract.functions.registerAgent(ctx.agent.address).build_transaction({
             'from': AGENT_EVM_ADDRESS,
-            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS),
-            'gas': 200000,
-            'gasPrice': w3.eth.gas_price
+            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
         })
+        
+        ctx.logger.info(f"Transaction details: gas={register_tx.get('gas')}, gasPrice={register_tx.get('gasPrice')}")
+        
         signed_register = agent_account.sign_transaction(register_tx)
         register_hash = w3.eth.send_raw_transaction(signed_register.rawTransaction)
-        w3.eth.wait_for_transaction_receipt(register_hash)
+        ctx.logger.info(f"Transaction sent: {register_hash.hex()}")
+        ctx.logger.info("Waiting for confirmation...")
+        
+        register_receipt = w3.eth.wait_for_transaction_receipt(register_hash, timeout=120)
+        
+        if register_receipt['status'] != 1:
+            ctx.logger.error(f"Registration transaction reverted! TX: {register_hash.hex()}")
+            ctx.logger.error(f"Receipt: {register_receipt}")
+            raise Exception(f"Registration transaction failed! Check transaction: {register_hash.hex()}")
+        
         ctx.logger.info(f"✓ Registration transaction: {register_hash.hex()}")
         ctx.logger.info(f"🎉 Agent successfully registered!")
         
@@ -97,7 +134,7 @@ async def check_and_register_agent(ctx: Context):
 
 async def listen_for_verification_events(ctx: Context):
     """Listen for verification request events from the blockchain"""
-    event_filter = contract.events.VerificationRequested.create_filter(from_block="latest")
+    event_filter = factory_contract.events.VerificationRequested.create_filter(from_block="latest")
     while True:
         for event in event_filter.get_new_entries():
             data = event["args"]
@@ -112,7 +149,7 @@ async def listen_for_verification_events(ctx: Context):
 
 async def listen_for_mint_events(ctx: Context):
     """Listen for new NFT mint events and create embeddings immediately"""
-    event_filter = contract.events.Minted.create_filter(from_block="latest")
+    event_filter = nft_contract.events.Minted.create_filter(from_block="latest")
     while True:
         for event in event_filter.get_new_entries():
             data = event["args"]
@@ -122,7 +159,7 @@ async def listen_for_mint_events(ctx: Context):
             
             try:
                 # Get the token URI from the contract
-                token_uri = contract.functions.tokenURI(token_id).call()
+                token_uri = nft_contract.functions.tokenURI(token_id).call()
                 ctx.logger.info(f"Fetching URI for NFT #{token_id}: {token_uri}")
                 
                 # Create embedding if it doesn't exist
@@ -142,8 +179,8 @@ async def sync_nft_embeddings(ctx: Context):
     """Sync NFT embeddings from blockchain to Qdrant"""
     while True:
         try:
-            # Call syncAgent function from smart contract
-            total_count, nft_ids, nft_uris = contract.functions.syncAgent().call()
+            # Call syncAgent function from smart contract (RealiaFactory)
+            total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
             ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
             
             # Check each NFT and create embedding if missing
@@ -215,7 +252,7 @@ async def handle_verification(ctx: Context, request_id: int):
         ctx.logger.info(f"Processing verification request #{request_id}")
         
         # Get verification request details from blockchain
-        verification_req = contract.functions.verificationRequests(request_id).call()
+        verification_req = factory_contract.functions.verificationRequests(request_id).call()
         verification_uri = verification_req[1]
         is_processed = verification_req[2]
         
@@ -265,20 +302,24 @@ async def handle_verification(ctx: Context, request_id: int):
         result_name = ["NONE", "VERIFIED", "MODIFIED", "NOT_VERIFIED"][verification_result]
         ctx.logger.info(f"Submitting response: result={result_name}, tokenId={matched_token_id}")
         
-        response_tx = contract.functions.responseVerification(
+        response_tx = factory_contract.functions.responseVerification(
             request_id,
             verification_result,
             matched_token_id
         ).build_transaction({
             'from': AGENT_EVM_ADDRESS,
-            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS),
-            'gas': 300000,
-            'gasPrice': w3.eth.gas_price
+            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
         })
         
         signed_response = agent_account.sign_transaction(response_tx)
         response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
-        w3.eth.wait_for_transaction_receipt(response_hash)
+        ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
+        
+        response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
+        
+        if response_receipt['status'] != 1:
+            ctx.logger.error(f"Verification response transaction reverted! TX: {response_hash.hex()}")
+            raise Exception(f"Verification response failed! TX: {response_hash.hex()}")
         
         ctx.logger.info(f"✓ Response submitted! TX: {response_hash.hex()}")
         ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
