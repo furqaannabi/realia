@@ -324,7 +324,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Team
 
-Built with ❤️ by Furqaan Nabi for ETHOnline 2025
+Built with ❤️ by Furqaan Nabi and Apurva Borhade for ETHOnline 2025
 
 ---
 
