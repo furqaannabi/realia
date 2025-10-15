@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "compile": "npx hardhat compile",
-    "deploy:sepolia": "npx hardhat ignition deploy ignition/modules/Realia.ts --network arbitrumSepolia --verify",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network arbitrumSepolia",
     "verify:sepolia": "npx hardhat ignition verify chain-421614 --network arbitrumSepolia"
   },
   "devDependencies": {

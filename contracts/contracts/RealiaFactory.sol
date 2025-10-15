@@ -3,11 +3,9 @@ pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-interface IRealiaNFT {
-  function tokenId() external view returns (uint256);
-  function tokenURI(uint256 tokenId) external view returns (string memory);
-}
+import {IRealiaNFT} from "./interfaces/IRealiaNFT.sol";
+import {OrderType, VerificationResult} from "./types/Types.sol";
+import {Order, Agent, VerificationRequest, VerificationResponse} from "./types/Structs.sol";
 
 contract RealiaFactory is Ownable {
   uint256 constant public MINT_PRICE = 1e6;
@@ -18,47 +16,6 @@ contract RealiaFactory is Ownable {
   IERC20 public constant PYUSD = IERC20(0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1);
   uint256 public verificationId = 0;
   IRealiaNFT public realiaNFT;
-
-  enum OrderType {
-    NONE,
-    MINT,
-    VERIFY
-  }
-
-  struct Order {
-    OrderType orderType;
-    uint256 amount;
-    bool used;
-    bool cancelled;
-  }
-
-  struct Agent {
-    string agentAddress;
-    address evmAddress;
-    uint256 verifiedCount;
-    bool isStaked;
-  }
-
-  struct VerificationRequest {
-    address user;
-    string uri;
-    bool processed;
-    uint256 requestTime;
-  }
-  
-  enum VerificationResult {
-    NONE,
-    VERIFIED,
-    MODIFIED,
-    NOT_VERIFIED
-  }
-
-  struct VerificationResponse {
-    address agent;
-    VerificationResult result;
-    uint256 tokenId;
-    uint256 responseTime;
-  }
 
   mapping(address => Agent) public agents;
   address[] public agentAddresses;
@@ -107,6 +64,11 @@ contract RealiaFactory is Ownable {
       }
     }
     emit AgentsPaid(amountAfterFee, amountPerAgent);
+  }
+
+  function payAgentsForMint(address[] memory agentsToPay) external {
+    require(msg.sender == address(realiaNFT), "Not the RealiaNFT contract");
+    _payAgents(OrderType.MINT, agentsToPay, false);
   }
 
   function getTopFiveAgents() public view returns (address[] memory) {

@@ -5,13 +5,8 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
-
-interface IRealiaFactory {
-  function hasOrder(address user, OrderType orderType) external view returns (bool);
-  function useMintOrder(address user) external returns (bool);
-  function getTopFiveAgents() external view returns (address[] memory);
-  function payAgents(OrderType orderType, address[] memory agentsToPay, bool isSlash) external;
-}
+import {IRealiaFactory} from "./interfaces/IRealiaFactory.sol";
+import {OrderType} from "./types/Types.sol";
 
 contract RealiaNFT is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   uint256 public tokenId = 0;
@@ -29,7 +24,7 @@ contract RealiaNFT is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     realiaFactory.useMintOrder(to);
     _mint(to, tokenId);
     _setTokenURI(tokenId, uri);
-    realiaFactory.payAgents(OrderType.MINT, realiaFactory.getTopFiveAgents(), false);
+    realiaFactory.payAgentsForMint(realiaFactory.getTopFiveAgents());
     emit Minted(to, tokenId);
   }
 
