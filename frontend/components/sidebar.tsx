@@ -3,7 +3,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Home, ImageIcon, Clock, Server, Wallet, Settings, ChevronLeft, ChevronRight, LogOut } from "lucide-react"
+import { Home, ImageIcon, Clock, Server, Wallet, Settings, ChevronLeft, ChevronRight, LogOut, Lock } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { ConnectButton } from "@rainbow-me/rainbowkit"
@@ -12,6 +12,7 @@ import { WalletSidebarButton } from './WalletSidebarButton';
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/mint", label: "Mint NFT", icon: ImageIcon },
+  { href: "/verify", label: "Verify Image", icon: Lock },
   // { href: "/history", label: "Verification History", icon: Clock },
   // { href: "/nodes", label: "Verifier Nodes", icon: Server },
   // { href: "/wallet", label: "Wallet", icon: Wallet },
