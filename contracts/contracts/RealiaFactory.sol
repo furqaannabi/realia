@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
+interface IRealiaNFT {
+  function tokenId() external view returns (uint256);
+  function tokenURI(uint256 tokenId) external view returns (string memory);
+}
+
+contract RealiaFactory is Ownable {
   uint256 constant public MINT_PRICE = 1e6;
   uint256 constant public VERIFY_PRICE = 5e4;
   uint256 constant public MIN_AGENT_STAKING = 5e4;
   uint256 constant public PROTOCOL_FEE_PERCENTAGE = 10;
   uint256 constant public REQUIRED_VERIFICATIONS = 5;
   IERC20 public constant PYUSD = IERC20(0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1);
-  uint256 public tokenId = 0;
   uint256 public verificationId = 0;
+  IRealiaNFT public realiaNFT;
 
   enum OrderType {
     NONE,
@@ -63,9 +65,8 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   mapping(uint256 => VerificationRequest) public verificationRequests;
   mapping(uint256 => VerificationResponse[]) public verificationResponses;
   mapping(address => Order[]) public orders;
-  constructor() ERC721("Realia", "REALIA") Ownable(msg.sender) {}
+  constructor() Ownable(msg.sender) {}
 
-  event Minted(address to, uint256 tokenId);
   event Verified(address to, uint256 tokenId);
   event OrderCreated(address to, OrderType orderType, uint256 amount);
   event VerificationRequested(address user, uint256 requestId);
@@ -77,15 +78,6 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
   event AgentAddressUpdated(address agent, string agentAddress);
   event AgentsPaid(uint256 amount, uint256 amountPerAgent);
   event OrderCancelled(address to, OrderType orderType, uint256 amount);
-  function mint(address to, string memory uri) external onlyOwner {
-    require(hasOrder(to, OrderType.MINT), "No mint order found");
-    tokenId++;
-    _useOrder(OrderType.MINT);
-    _mint(to, tokenId);
-    _setTokenURI(tokenId, uri);
-    _payAgents(OrderType.MINT, getTopFiveAgents(), false);
-    emit Minted(to, tokenId);
-  }
 
   function _payAgents(OrderType orderType, address[] memory agentsToPay, bool isSlash) internal {
     uint256 amountBeforeFee;
@@ -165,16 +157,22 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     emit OrderCancelled(msg.sender, orderType, amount);
   }
 
-  function _useOrder(OrderType orderType) internal returns (bool) {
-    for (uint256 i = 0; i < orders[msg.sender].length; i++) {
-      Order memory order = orders[msg.sender][i];
+  function _useOrder(address user, OrderType orderType) internal returns (bool) {
+    for (uint256 i = 0; i < orders[user].length; i++) {
+      Order memory order = orders[user][i];
       if (order.orderType == orderType && order.used == false && order.cancelled == false) {
-        orders[msg.sender][i].used = true;
+        orders[user][i].used = true;
         PYUSD.transfer(owner(), order.amount * PROTOCOL_FEE_PERCENTAGE / 100);
         return true;
       }
     }
     return false;
+  }
+
+  function useMintOrder(address user) internal returns (bool) {
+    require(address(realiaNFT) == msg.sender, "Not the RealiaNFT contract");
+    require(hasOrder(user, OrderType.MINT), "No mint order found");
+    return _useOrder(user, OrderType.MINT);
   }
 
   function hasOrder(address user, OrderType orderType) public view returns (bool) { 
@@ -232,7 +230,7 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
 
   function requestVerification(address user, string memory uri) external onlyOwner {
     require(hasOrder(user, OrderType.VERIFY), "No verify order found");
-    _useOrder(OrderType.VERIFY);
+    _useOrder(user, OrderType.VERIFY);
     verificationId++;
     verificationRequests[verificationId] = VerificationRequest(user, uri, false, block.timestamp);
     emit VerificationRequested(user, verificationId);
@@ -334,14 +332,6 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
     emit ProcessedVerification(requestId);
   }
 
-  function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721URIStorage) returns (bool) {
-    return super.supportsInterface(interfaceId);
-  }
-
-  function tokenURI(uint256 _tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
-    return super.tokenURI(_tokenId);
-  }
-
   /**
    * @dev Sync function for agents to get NFT count and NFT data
    * @return totalCount The total number of NFTs minted
@@ -349,15 +339,20 @@ contract Realia is ERC721, Ownable, ERC721URIStorage, ERC721Burnable {
    * @return nftUris Array of all NFT URIs corresponding to the token IDs
    */
   function syncAgent() external view returns (uint256 totalCount, uint256[] memory nftIds, string[] memory nftUris) {
-    totalCount = tokenId;
+    totalCount = realiaNFT.tokenId();
     nftIds = new uint256[](totalCount);
     nftUris = new string[](totalCount);
     
     for (uint256 i = 1; i <= totalCount; i++) {
       nftIds[i - 1] = i;
-      nftUris[i - 1] = tokenURI(i);
+      nftUris[i - 1] = realiaNFT.tokenURI(i);
     }
     
     return (totalCount, nftIds, nftUris);
+  }
+
+  function setRealiaNFT(address _realiaNFT) external onlyOwner {
+    require(address(realiaNFT) == address(0), "RealiaNFT already set");
+    realiaNFT = IRealiaNFT(_realiaNFT);
   }
 }
