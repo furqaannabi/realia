@@ -311,6 +311,7 @@ export default function VerifyPage() {
             let res
             try {
                 res = await api.post("/verify", formData)
+                console.log(res)
             } catch (apiErr: any) {
                 setLoadingApi(false)
                 const errMsg = apiErr?.response?.data?.error
@@ -322,7 +323,7 @@ export default function VerifyPage() {
             }
             setLoadingApi(false)
 
-            if (res?.data && res.data.success) {
+            if (res?.data) {
                 toast.success("NFT Verified Successfully!")
                 setVerified(true)
                 setVerificationError(null)
