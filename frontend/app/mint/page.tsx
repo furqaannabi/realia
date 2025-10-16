@@ -17,6 +17,7 @@ import RealiaABI from "@/app/utils/web3/Realia.json";
 import ERC20ABI from "@/app/utils/web3/ERC20.json";
 import { signMessage, simulateContract, writeContract, readContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
+import { motion, AnimatePresence } from "framer-motion"
 
 // --- Mint price and contract order type constants from Solidity (see file_context_0) ---
 const MINT_PRICE = "1"; // 1e6 (6 decimals), string for parseUnits
@@ -202,6 +203,7 @@ export default function MintPage() {
       setPreview(url)
     }
   }, [file])
+
   const resetMint = () => {
     setMinted(null)
     setFile(null)
@@ -210,22 +212,51 @@ export default function MintPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold">Mint Authenticity NFT</h1>
-        <p className="text-sm text-muted-foreground mt-1">Mint your authenticity NFT instantly.</p>
-      </div>
+    <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.34, type: "spring", stiffness: 170 }}
+        className="mb-8"
+      >
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-pretty text-white drop-shadow-xl">
+          Mint Authenticity NFT
+        </h1>
+        <p className="mt-1 text-base text-zinc-300 max-w-2xl font-medium drop-shadow-sm">
+          Mint your authenticity NFT instantly on-chain. Secure, modern, decentralized.
+        </p>
+      </motion.div>
+      <motion.div
+        className="grid gap-8 lg:grid-cols-2"
+        initial={{ opacity: 0, y: 32 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.11, duration: 0.4 }}
+      >
+        {/* Upload + Preview CARD (left) */}
+        <Card className="relative border-2 border-white/10 bg-gradient-to-br from-zinc-950 via-zinc-900/90 to-black/90 backdrop-blur rounded-2xl shadow-xl shadow-black/20 overflow-hidden text-white">
+          <CardHeader className="pb-4 flex items-center gap-2 bg-gradient-to-r from-zinc-950/40 to-zinc-900/70 rounded-t-2xl shadow-inner">
+            <CardTitle className="font-bold text-lg tracking-wide flex items-center gap-2 text-white/95">
+              {/* Icon space */}
+              <svg width={20} height={20} viewBox="0 0 20 20" fill="none" className="text-white/60"><rect width="20" height="20" rx="3" fill="currentColor" fillOpacity={0.24} /></svg>
+              Upload & Preview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UploadCard onChange={setFile} className="w-full" />
 
-      <div className="grid gap-6 md:grid-cols-5">
-        {/* Left: Large image preview / uploader */}
-        <div className="md:col-span-3">
-          <UploadCard onChange={setFile} className="w-full" />
-        </div>
+            {preview && (
+              <div className="mt-6 flex flex-col items-center">
+                {/* Image preview could be shown here if desired */}
+                <div className="text-sm text-zinc-400">Image selected for mint</div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Right: Steps and CTA */}
-        <div className="md:col-span-2 space-y-6">
+        {/* Mint Steps + Status (right) */}
+        <div className="flex flex-col gap-8">
           {/* Stepper */}
-          <Card className="bg-card/70 backdrop-blur border-border">
+          <Card className="bg-card/60 backdrop-blur border-2 border-white/10 rounded-2xl">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <StepBadge
@@ -234,7 +265,7 @@ export default function MintPage() {
                   active={!!preview && !minted}
                   done={!!preview && Boolean(minted)}
                 />
-                <div className="h-px flex-1 mx-2 bg-border" />
+                <div className="h-px flex-1 mx-2 bg-white/15" />
                 <StepBadge
                   step={2}
                   label="Mint"
@@ -246,57 +277,67 @@ export default function MintPage() {
           </Card>
 
           {/* Mint status */}
-          <Card className="bg-card/70 backdrop-blur border-border">
+          <Card className="bg-card/60 backdrop-blur border-2 border-white/10 rounded-2xl">
             <CardHeader>
-              <CardTitle className="text-base">Mint NFT</CardTitle>
+              <CardTitle className="text-base font-semibold text-white/90">Mint NFT</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {status && <div className="text-xs text-gray-500">{status}</div>}
-
+              {status && <div className="text-xs text-zinc-400 font-medium">{status}</div>}
               {!preview && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-zinc-400">
                   Select an image to mint your NFT.
                 </div>
               )}
-
               {preview && !minted && (
-                <div className="text-sm text-muted-foreground">
-                  Ready to mint your authenticity NFT.
+                <div className="text-sm text-zinc-400">
+                  Ready to mint your authenticity NFT. 
                 </div>
               )}
-
-              {minted && (
-                <div className="space-y-3">
-                  <div className="text-sm">Minted successfully on Testnet.</div>
-                  <div className="grid gap-2 rounded border border-border/60 p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">NFT ID</span>
-                      <span>{minted.id}</span>
+              <AnimatePresence>
+                {minted && (
+                  <motion.div
+                    key="mint-result"
+                    initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.4, type: "spring", stiffness: 120 }}
+                    className="space-y-3"
+                  >
+                    <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow w-fit">
+                      <svg width={14} height={14} fill="none" viewBox="0 0 24 24" className="inline-block mr-1 text-white/80"><path stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      Minted!
+                    </Badge>
+                    <div className="grid gap-2 rounded border border-white/20 bg-black/30 p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">NFT ID</span>
+                        <span className="text-white/90">{minted.id}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Image Hash</span>
+                        <span className="text-white/90">{minted.imageHash}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">IPFS</span>
+                        <span className="truncate text-white/90">{minted.ipfs}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Minted at</span>
+                        <span className="text-white/90">{minted.timestamp}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Image Hash</span>
-                      <span>{minted.imageHash}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">IPFS</span>
-                      <span className="truncate">{minted.ipfs}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Minted</span>
-                      <span>{minted.timestamp}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </CardContent>
           </Card>
 
-          {/* CTA */}
+          {/* CTA Buttons */}
           <div className="flex items-center gap-3">
             {!minted ? (
               <GradientButton
                 disabled={!file || minting}
                 onClick={handleMint}
+                className="px-6 py-2 font-semibold text-lg"
               >
                 {minting ? <Loader2 className="animate-spin" /> : "Mint Authenticity NFT"}
               </GradientButton>
@@ -304,11 +345,11 @@ export default function MintPage() {
               <Button
                 variant="secondary"
                 onClick={resetMint}
+                className="px-4 py-2"
               >
                 Start new mint
               </Button>
             )}
-
             {!minted && (
               <Button
                 variant="ghost"
@@ -319,7 +360,7 @@ export default function MintPage() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </main>
   )
 }
