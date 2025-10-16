@@ -6,23 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { UploadCloud, ImageIcon, Copy, CheckCircle2, Loader2, AlertTriangle, RefreshCcw } from "lucide-react"
+import { UploadCloud, ImageIcon, CheckCircle2, Loader2, AlertTriangle, RefreshCcw } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "../utils/axiosInstance"
 import { useAccount, useWriteContract } from "wagmi"
 import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../utils/config"
-import RealiaABI from "@/app/utils/web3/Realia.json";
-import ERC20ABI from "@/app/utils/web3/ERC20.json";
+import RealiaABI from "@/app/utils/web3/Realia.json"
+import ERC20ABI from "@/app/utils/web3/ERC20.json"
 import { parseUnits } from "viem"
 import { readContract, simulateContract, writeContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { ethers } from 'ethers'
 import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
 type ImgDims = { width: number; height: number }
 
-// --- Mint price and contract order type constants from Solidity (see file_context_0) ---
-const VERIFY_PRICE = "5"; // 1e6 (6 decimals), string for parseUnits
+const VERIFY_PRICE = "5";
 const ORDER_TYPE_VERIFY = 2;
 
 function formatBytes(bytes: number) {
@@ -31,32 +30,6 @@ function formatBytes(bytes: number) {
     const sizes = ["B", "KB", "MB", "GB", "TB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
-}
-
-async function sha256Hex(buffer: ArrayBuffer) {
-    const hash = await crypto.subtle.digest("SHA-256", buffer)
-    const bytes = new Uint8Array(hash)
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-}
-
-function detectExif(buffer: ArrayBuffer) {
-    const bytes = new Uint8Array(buffer)
-    const exif = [0x45, 0x78, 0x69, 0x66] // "Exif"
-    for (let i = 0; i < bytes.length - exif.length; i++) {
-        if (bytes[i] === exif[0] && bytes[i + 1] === exif[1] && bytes[i + 2] === exif[2] && bytes[i + 3] === exif[3]) {
-            return true
-        }
-    }
-    return false
-}
-
-function seedScoreFromHash(hashHex: string, exif: boolean) {
-    const seed = Number.parseInt(hashHex.slice(0, 4), 16) % 39
-    let score = 60 + seed
-    if (exif) score = Math.min(98, score + 2)
-    return score
 }
 
 async function getImageDimensions(file: File): Promise<ImgDims> {
@@ -76,24 +49,14 @@ async function getImageDimensions(file: File): Promise<ImgDims> {
     })
 }
 
-const copyToClipboard = async (text: string) => {
-    try {
-        await navigator.clipboard.writeText(text)
-    } catch {
-        // no-op: clipboard might be blocked
-    }
-}
-
-// --- Loader Steps, loader UI helpers ---
 const loaderSteps: { key: string; label: string }[] = [
-    { key: "prepare", label: "Hash & Inspect Image..." },
+    { key: "prepare", label: "Prepare image..." },
     { key: "approve", label: "Approving tokens..." },
     { key: "order", label: "Placing order on-chain..." },
     { key: "api", label: "Finalizing with backend..." },
     { key: "watcher", label: "Waiting for on-chain confirmation..." },
 ]
 
-// Updated to add watcher step (4)
 function getActiveLoaderStepExtended({
     loadingApprove,
     loadingOrder,
@@ -101,22 +64,18 @@ function getActiveLoaderStepExtended({
     verifying,
     watcherActive,
 }: any): number {
-    if (verifying && loadingApprove) return 1 // Approving tokens
-    if (verifying && loadingOrder) return 2 // Placing order
-    if (verifying && loadingApi) return 3 // API
-    if (watcherActive) return 4 // Awaiting watcher confirmation
-    if (verifying && !loadingApprove && !loadingOrder && !loadingApi) return 0 // Hash image etc
+    if (verifying && loadingApprove) return 1
+    if (verifying && loadingOrder) return 2
+    if (verifying && loadingApi) return 3
+    if (watcherActive) return 4
+    if (verifying && !loadingApprove && !loadingOrder && !loadingApi) return 0
     return -1
 }
 
 export default function VerifyPage() {
     const [file, setFile] = React.useState<File | null>(null)
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
-    const [buffer, setBuffer] = React.useState<ArrayBuffer | null>(null)
-    const [hashHex, setHashHex] = React.useState<string>("")
     const [dims, setDims] = React.useState<ImgDims | null>(null)
-    const [exifPresent, setExifPresent] = React.useState<boolean | null>(null)
-    const [score, setScore] = React.useState<number | null>(null)
     const [verifying, setVerifying] = React.useState(false)
     const [verified, setVerified] = React.useState(false)
     const [verificationError, setVerificationError] = React.useState<string | null>(null)
@@ -126,9 +85,7 @@ export default function VerifyPage() {
     const [loadingApi, setLoadingApi] = React.useState(false)
 
     const [verificationId, setVerificationId] = React.useState<string | null>(null)
-    // --- Verification Watcher additions ---
     const { isVerified, loading: watcherLoading, error: watcherError, startWatcher } = useVerificationWatcher()
-    // Track if watcher is actively waiting for on-chain status
     const [watcherActive, setWatcherActive] = React.useState(false)
 
     React.useEffect(() => {
@@ -140,7 +97,6 @@ export default function VerifyPage() {
         console.log(isVerified, watcherLoading, watcherError)
     }, [isVerified, watcherLoading, watcherError])
 
-    // --- Loader message handling (extended for watcher) ---
     const [loaderMessages, setLoaderMessages] = React.useState<
         { step: number, type: "loading" | "done", message: string }[]
     >([])
@@ -200,7 +156,6 @@ export default function VerifyPage() {
         }
     }
 
-    // Watcher flow: when new verificationId set, activate watcher loader, until watcher completes
     React.useEffect(() => {
         if (verificationId) {
             setWatcherActive(true)
@@ -210,15 +165,12 @@ export default function VerifyPage() {
     }, [verificationId])
 
     React.useEffect(() => {
-        // When watcher finishes, deactivate watcher loader step
         if (watcherActive && !watcherLoading) {
             setWatcherActive(false)
-            // Show complete UI after watcher success
             if (isVerified) {
                 setVerified(true)
             }
         }
-        // If there's a watcher error, treat as error in UI
         if (watcherError) {
             setVerificationError("Failed waiting for on-chain confirmation" + (watcherError ? `: ${watcherError}` : ""))
             setWatcherActive(false)
@@ -226,10 +178,8 @@ export default function VerifyPage() {
         // eslint-disable-next-line
     }, [watcherLoading, isVerified, watcherError])
 
-    // Chat-like loader: step at which we are in verification/watcher
     const [lastLoaderStep, setLastLoaderStep] = React.useState(-1)
 
-    // Enhanced loader: Reset chat steps when verification is retried
     React.useEffect(() => {
         if (!verifying && !watcherActive) {
             setLoaderMessages([])
@@ -237,9 +187,7 @@ export default function VerifyPage() {
         }
     }, [verifying, watcherActive])
 
-    // Update chat messages as step changes (WITH WATCHER)
     React.useEffect(() => {
-        // Figure out which step is active (now includes watcher step)
         const activeLoaderStep = getActiveLoaderStepExtended({
             loadingApprove,
             loadingOrder,
@@ -247,19 +195,16 @@ export default function VerifyPage() {
             verifying,
             watcherActive
         });
-        // If the step changed, update chat log
         if (!(verifying || watcherActive)) return
         if (activeLoaderStep !== lastLoaderStep) {
             setLoaderMessages((prev) => {
                 let updated = prev.slice();
-                // Complete the previous, if any and not yet done
                 if (lastLoaderStep >= 0 && prev[prev.length - 1]?.type === "loading") {
                     updated[updated.length - 1] = {
                         ...updated[updated.length - 1],
                         type: "done"
                     }
                 }
-                // Add the new one if not already present
                 if (
                     activeLoaderStep >= 0 &&
                     (!updated.length || updated[updated.length - 1].step !== activeLoaderStep)
@@ -297,26 +242,14 @@ export default function VerifyPage() {
         setLoaderMessages([{ step: 0, type: "loading", message: loaderSteps[0].label }]);
         setLastLoaderStep(0);
 
-        // Clear details and reset on each verify
-        setHashHex("")
         setDims(null)
-        setExifPresent(null)
-        setScore(null)
 
         try {
-            // 1. Compute hash & EXIF & dimensions client-side
-            const arr = buffer ?? (await file.arrayBuffer())
-            const [hex, exif] = await Promise.all([sha256Hex(arr), Promise.resolve(detectExif(arr))])
-            setHashHex(hex)
-            setExifPresent(exif)
-            const sc = seedScoreFromHash(hex, exif)
-            setScore(sc)
             if (!dims) {
                 const d = await getImageDimensions(file)
                 setDims(d)
             }
 
-            // 2. Approve tokens
             setLoadingApprove(true)
             try {
                 await handleApprove()
@@ -329,7 +262,6 @@ export default function VerifyPage() {
             }
             setLoadingApprove(false)
 
-            // 3. Ensure an order exists or create one
             setLoadingOrder(true)
             let hasOrder = false
             try {
@@ -339,7 +271,6 @@ export default function VerifyPage() {
             }
             if (!hasOrder) {
                 try {
-                    console.log("Creatibg Order")
                     await handleCreateOrder()
                 } catch (orderErr) {
                     setLoadingOrder(false)
@@ -351,27 +282,19 @@ export default function VerifyPage() {
             }
             setLoadingOrder(false)
 
-            // 4. POST to API backend for mint
             setLoadingApi(true)
             const formData = new FormData()
             formData.append("image", file)
             let res
             try {
                 res = await api.post("/verify", formData)
-                console.log(res)
 
                 const verificationId = res.data?.verificationId || res.data?.id
                 if (verificationId) {
                     toast.success(`Verification request submitted (ID: ${verificationId})`)
-                    console.log("Verification Request ID:", verificationId)
-
-                    // Optionally store it in state
                     setVerificationId(verificationId)
-
-                    // (Optional) Poll or fetch status from backend
                     startWatcher(verificationId)
                 }
-
             } catch (apiErr: any) {
                 setLoadingApi(false)
                 const errMsg = apiErr?.response?.data?.error
@@ -382,9 +305,6 @@ export default function VerifyPage() {
                 return false
             }
             setLoadingApi(false)
-
-            // Now, from here, watcherActive will be set, and UI will display loader until watcher signals complete
-            // Waiting for watcher to resolve sets `verified=true` elsewhere.
             return true;
         } catch (error: any) {
             console.error("Verification error:", error)
@@ -412,11 +332,7 @@ export default function VerifyPage() {
 
     const onSelect = async (f: File | null) => {
         setVerified(false)
-        setHashHex("")
         setDims(null)
-        setExifPresent(null)
-        setScore(null)
-        setBuffer(null)
         setVerificationError(null)
 
         if (!f) {
@@ -432,12 +348,9 @@ export default function VerifyPage() {
         setPreviewUrl(url)
 
         try {
-            const [arrBuf, d] = await Promise.all([f.arrayBuffer(), getImageDimensions(f)])
-            setBuffer(arrBuf)
+            const d = await getImageDimensions(f)
             setDims(d)
-        } catch {
-            // swallow
-        }
+        } catch {}
     }
 
     const onDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
@@ -454,7 +367,6 @@ export default function VerifyPage() {
         await verifyImage()
     }
 
-    // New overall loading for pipeline/watcher
     const overallLoading =
         verifying ||
         loadingApprove ||
@@ -462,7 +374,6 @@ export default function VerifyPage() {
         loadingApi ||
         watcherActive
 
-    // Step index for progress/pipeline bar: extended for watcher
     const activeLoaderStep = getActiveLoaderStepExtended({
         loadingApprove,
         loadingOrder,
@@ -471,10 +382,8 @@ export default function VerifyPage() {
         watcherActive,
     })
 
-    // For smooth pipelined loader with progress % (25, 50, 75, 95, 100)
     const stepProgressPercent = [20, 40, 70, 93, 99, 100][activeLoaderStep >= 0 ? activeLoaderStep : 0];
 
-    // Status string for mobile/progress fallback
     let loaderMessage = ""
     if (activeLoaderStep >= 0 && loaderSteps[activeLoaderStep]) {
         loaderMessage = loaderSteps[activeLoaderStep].label
@@ -484,107 +393,112 @@ export default function VerifyPage() {
         loaderMessage = "Waiting for on-chain confirmation..."
     }
 
-    // Chat-like Loader display for VERIFICATION details panel (right-side)
     function ChatLoaderPipeline() {
         return (
             <div className="w-full flex flex-col items-start gap-2 pb-2 text-sm">
-                {loaderMessages.map((msg, i) => {
-                    // Only animate the *last* (new) message
-                    const isNewest = i === loaderMessages.length - 1;
-                    if (isNewest) {
-                        return (
-                            <motion.span
-                                key={msg.step}
-                                initial={{ opacity: 0, y: 5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{
-                                    delay: i * 0.06,
-                                    duration: 0.28,
-                                    type: "spring",
-                                    stiffness: 122,
-                                }}
-                                className={
-                                    msg.type === "done"
-                                        ? "text-green-700 font-medium"
-                                        : "text-gray-400"
-                                }
-                            >
-                                {msg.type === "done"
-                                    ? msg.message.replace("...", " ✓")
-                                    : msg.message}
-                            </motion.span>
-                        );
-                    } else {
-                        return (
-                            <span
-                                key={msg.step}
-                                className={
-                                    msg.type === "done"
-                                        ? "text-green-700 font-medium"
-                                        : "text-gray-400"
-                                }
-                            >
-                                {msg.type === "done"
-                                    ? msg.message.replace("...", " ✓")
-                                    : msg.message}
-                            </span>
-                        );
-                    }
-                })}
+                <AnimatePresence mode="wait">
+                {loaderMessages.map((msg, i) => (
+                        <motion.span
+                            key={msg.step}
+                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{
+                                delay: i * 0.05,
+                                duration: 0.32,
+                                type: "spring",
+                                stiffness: 150,
+                            }}
+                            className={`rounded-full px-3 py-1 mb-0.5 shadow ${
+                                msg.type === "done"
+                                    ? "bg-black text-white font-bold border border-white/10"
+                                    : "bg-zinc-900/80 text-zinc-300"
+                            }`}
+                        >
+                            {msg.type === "done"
+                                ? msg.message.replace("...", " ✓")
+                                : msg.message}
+                        </motion.span>
+                    ))}
+                </AnimatePresence>
             </div>
         );
     }
 
-    // Enhanced error state with icon and context/tips
     function ErrorDisplay({ err, retry, disabled }: { err: string, retry: () => void, disabled: boolean }) {
         return (
-            <div className="flex flex-col gap-5 items-center justify-center rounded-lg border p-8 shadow-md">
-                <div className="flex items-center gap-2 text-red-600">
-                    <AlertTriangle className="h-6 w-6" strokeWidth={2.4} />
+            <motion.div
+                initial={{ scale: 0.98, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                className="relative flex flex-col bg-gradient-to-bl from-zinc-900/80 via-zinc-700/30 to-zinc-600/10 backdrop-blur gap-5 items-center justify-center rounded-xl border-2 border-white/10 p-8 shadow-2xl overflow-hidden"
+            >
+                <motion.div
+                    initial={{ scale: 0.7, y: -24, opacity: 0 }}
+                    animate={{ scale: 1, y: 0, opacity: 1 }}
+                    transition={{ type: "spring", duration: 0.4, delay: 0.06 }}
+                    className="absolute left-3 top-3 opacity-20"
+                >
+                    <AlertTriangle className="h-14 w-14 text-black/60" strokeWidth={2.5} />
+                </motion.div>
+                <div className="flex items-center gap-2 text-zinc-100 bg-zinc-800/80 px-4 py-2 rounded-lg shadow font-bold">
+                    <AlertTriangle className="h-6 w-6 text-white/70" strokeWidth={2.2} />
                     <span className="text-lg font-bold">Verification Failed</span>
                 </div>
-                <div className="w-full text-center text-red-700 font-normal text-base break-words">
+                <div className="w-full text-center text-zinc-100 font-normal text-base break-words max-w-lg bg-zinc-900/40 rounded-md px-3 py-2 shadow">
                     {err || "An unknown error occurred during verification."}
                 </div>
                 <Button
                     size="sm"
                     variant="secondary"
-                    className="flex cursor-pointer items-center gap-1.5 mt-2 px-4 py-2"
+                    className="flex cursor-pointer items-center gap-1.5 mt-2 px-4 py-2 transition hover:-translate-y-0.5 active:scale-95 bg-zinc-900/90 border-white/10 text-white font-semibold"
                     onClick={retry}
                     disabled={disabled}
                 >
-                    <RefreshCcw className="h-4 w-4 mr-0.5" />
+                    <RefreshCcw className="h-4 w-4 mr-0.5 animate-spin-slow" />
                     Retry
                 </Button>
-                <div className="mt-4 flex flex-col items-center text-xs text-gray-500 text-center gap-1 leading-tight">
-                    <p>• Make sure you are connected to your wallet and have enough tokens for the verification.</p>
-                    <p>• If this keeps happening,&nbsp;
-                        <a href="mailto:support@realia.app" className="text-blue-600 underline hover:text-blue-800">
+                <div className="mt-4 flex flex-col items-center text-xs text-zinc-300 text-center gap-1 leading-tight">
+                    <p>• Ensure your wallet is connected & you have enough tokens.</p>
+                    <p>• Still stuck?&nbsp;
+                        <a href="mailto:support@realia.app" className="text-white underline hover:text-zinc-100 font-medium">
                             contact support
                         </a>
-                        &nbsp;or try refreshing the page.
+                        &nbsp;or refresh.
                     </p>
                 </div>
-            </div>
+            </motion.div>
         )
     }
 
-    // LoaderPipeline for left panel (could be compact progress bar, not shown here), chat for details panel
-
+    // --- Upload+Preview Card ---
     return (
-        <main className="p-6 md:p-8">
-            <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-pretty">Verify Image</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Upload an image to compute its SHA-256, detect EXIF, and verify authenticity on-chain.
+        <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
+            <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.34, type: "spring", stiffness: 170 }}
+                className="mb-8"
+            >
+                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-pretty text-white drop-shadow-xl">
+                    Image Verification
+                </h1>
+                <p className="mt-1 text-base text-zinc-300 max-w-2xl font-medium drop-shadow-sm">
+                    Upload an image and verify authenticity on-chain. Secure, modern, decentralized.
                 </p>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-                {/* Left: Upload & Preview */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle>Upload & Preview</CardTitle>
+            </motion.div>
+            <motion.div
+                className="grid gap-8 lg:grid-cols-2"
+                initial={{ opacity: 0, y: 32 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.11, duration: 0.4 }}
+            >
+                {/* Upload + Preview CARD */}
+                <Card className="relative border-2 border-white/10 bg-gradient-to-br from-zinc-950 via-zinc-900/90 to-black/90 backdrop-blur rounded-2xl shadow-xl shadow-black/20 overflow-hidden text-white">
+                    <CardHeader className="pb-4 flex items-center gap-2 bg-gradient-to-r from-zinc-950/40 to-zinc-900/70 rounded-t-2xl shadow-inner">
+                        <CardTitle className="font-bold text-lg tracking-wide flex items-center gap-2 text-white/95">
+                            <UploadCloud className="w-5 h-5 text-white/60" />
+                            Upload & Preview
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <label
@@ -593,7 +507,12 @@ export default function VerifyPage() {
                                 e.stopPropagation()
                             }}
                             onDrop={onDrop}
-                            className="group relative flex h-96 w-full cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-background transition-colors hover:bg-muted/40"
+                            className={`
+                                group relative transition-colors flex h-80 md:h-96 w-full cursor-pointer items-center justify-center
+                                rounded-xl border-2 border-dashed bg-gradient-to-br from-black/70 via-black/50 to-zinc-900/70 hover:border-white/30
+                                focus-within:ring-2 focus-within:ring-white ring-offset-4
+                                ${previewUrl ? "border-zinc-700/60" : ""}
+                            `}
                         >
                             <input
                                 type="file"
@@ -605,194 +524,191 @@ export default function VerifyPage() {
                                 }}
                             />
                             {!previewUrl ? (
-                                <div className="flex flex-col items-center text-center text-sm text-muted-foreground">
-                                    <div className="mb-3 rounded-md border border-border p-3">
-                                        <UploadCloud className="h-5 w-5" />
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.96 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="flex flex-col items-center text-center text-sm text-zinc-100/70"
+                                >
+                                    <div className="mb-3 rounded-xl border-2 border-zinc-800 bg-black/50 p-5 shadow-lg">
+                                        <UploadCloud className="h-7 w-7 text-white/80" />
                                     </div>
-                                    <p className="font-medium text-foreground">Drag & drop an image</p>
-                                    <p className="mt-0.5">or click to browse (JPG, PNG, etc.)</p>
-                                </div>
+                                    <span className="font-semibold text-white">Drag & drop an image</span>
+                                    <span className="mt-1 text-zinc-200/60">or click to browse (JPG, PNG…)</span>
+                                </motion.div>
                             ) : (
-                                <div className="relative h-full w-full overflow-hidden rounded-md">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.97 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="relative h-full w-full overflow-hidden rounded-xl border border-zinc-800/80 shadow-xl"
+                                    style={{
+                                        background:
+                                            "radial-gradient(ellipse 95% 80% at 55% 45%, #232324 90%, #18171d 100%, #08090a 121%)",
+                                    }}
+                                >
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
                                         src={previewUrl || "/placeholder.svg"}
                                         alt="Uploaded preview"
-                                        className="h-full w-full object-contain bg-muted"
+                                        className="h-full w-full object-contain bg-gradient-to-t from-black via-zinc-950 to-black rounded-xl"
                                         crossOrigin="anonymous"
                                     />
-                                </div>
+                                    <span className="absolute bottom-3 right-3 text-xs bg-zinc-900/60 rounded px-3 py-1 text-zinc-300/70 tracking-wide shadow-sm border border-zinc-700/40">
+                                        Preview
+                                    </span>
+                                </motion.div>
                             )}
-
                             {!previewUrl && (
-                                <div className="pointer-events-none absolute inset-0 rounded-md ring-0 transition group-hover:ring-1 group-hover:ring-border" />
+                                <div className="pointer-events-none absolute inset-0 rounded-xl ring-0 transition group-hover:ring-2 group-hover:ring-white/10" />
                             )}
                         </label>
-
                         {file ? (
-                            <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                                <ImageIcon className="h-4 w-4" />
-                                <span className="font-medium text-foreground truncate">{file.name}</span>
+                            <motion.div
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mt-5 flex items-center gap-2 px-1 py-1 text-xs text-zinc-300 bg-zinc-900/60 rounded-lg shadow-inner border border-white/10"
+                            >
+                                <ImageIcon className="h-4 w-4 text-zinc-400" />
+                                <span className="font-medium truncate">{file.name}</span>
                                 <span>
-                                    • {file.type || "image"} • {formatBytes(file.size)}
+                                    &bull; {file.type || "image"} &bull; {formatBytes(file.size)}
                                 </span>
-                            </div>
+                            </motion.div>
                         ) : null}
 
-                        <div className="mt-4 flex gap-2">
+                        <div className="mt-6 flex gap-3">
                             <Button
                                 onClick={onVerify}
                                 disabled={!file || overallLoading}
-                                className="flex-1 cursor-pointer"
+                                className="flex-1 cursor-pointer text-lg font-semibold rounded-xl py-3 shadow-lg bg-gradient-to-br from-zinc-900 via-black to-zinc-800 text-white ring-1 ring-white/10 hover:scale-[1.035] transition active:scale-[.98] border border-white/10"
                                 variant="default"
                             >
                                 {overallLoading
-                                    ? (loaderMessage || "Verifying...")
+                                    ? (<>
+                                        <Loader2 className="mr-1 h-4 w-4 animate-spin-slow" />
+                                        {loaderMessage || "Verifying..."}
+                                    </>)
                                     : verified
                                         ? "Re-verify"
                                         : "Verify Image"}
                             </Button>
                             <Button
-                                variant="outline"
-                                className="whitespace-nowrap bg-transparent cursor-pointer"
+                                variant="ghost"
+                                className="whitespace-nowrap bg-zinc-900 border border-white/10 rounded-xl font-semibold text-white hover:bg-zinc-800 px-5 py-3 shadow"
                                 onClick={() => onSelect(null)}
                                 disabled={overallLoading}
                             >
                                 Clear
                             </Button>
                         </div>
-
                     </CardContent>
                 </Card>
-
-                {/* Right: Verification Details */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle>Verification Details</CardTitle>
+                <Card className="relative border-2 border-white/10 bg-gradient-to-br from-zinc-950/95 via-black/90 to-zinc-900/90 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden text-white">
+                    <CardHeader className="pb-4 bg-gradient-to-r from-black/80 to-zinc-900/40 rounded-t-2xl shadow-inner">
+                        <CardTitle className="font-bold text-lg tracking-wide flex items-center gap-3 text-white/95">
+                            <CheckCircle2 className="h-5 w-5 text-white/60" />
+                            Verification Details
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {/* Skeleton: Pending state */}
                         {!file && (
-                            <div className="flex items-start gap-3 rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-                                <UploadCloud className="mt-0.5 h-4 w-4" />
+                            <motion.div
+                                className="flex items-start gap-3 rounded-xl border-2 border-dashed border-white/10 p-6 mt-2 text-base text-zinc-300 bg-black/30 shadow-inner"
+                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                            >
+                                <UploadCloud className="mt-0.5 h-4 w-4 text-zinc-400" />
                                 <div>
-                                    Drop an image on the left to see its hash, EXIF presence, dimensions, and a minimal authenticity
-                                    score.
+                                    Drop an image on the left to see its dimensions and verification status.
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
-
-                        {/* CHAT-LIKE Loader */}
+                        <AnimatePresence>
                         {file && overallLoading && (
-                            <div className="flex flex-col items-start justify-start min-h-[260px] w-full sm:px-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 8 }}
+                                className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
+                            >
                                 <ChatLoaderPipeline />
-                                {/* Optionally, a progress bar can be shown here */}
-                            </div>
+                                <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
+                                    <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${stepProgressPercent}%` }}
+                                        transition={{ duration: 0.6, type: "spring", stiffness: 150}}
+                                        className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
+                                    />
+                                </div>
+                            </motion.div>
                         )}
-
-                        {/* Enhanced Error State */}
+                        </AnimatePresence>
+                        <AnimatePresence>
                         {file && !overallLoading && verificationError && (
                             <ErrorDisplay err={verificationError} retry={onVerify} disabled={overallLoading} />
                         )}
-
-                        {/* Only show verification details AFTER verification succeeds (never during loader, never if error) */}
+                        </AnimatePresence>
+                        <AnimatePresence>
                         {file && !overallLoading && !verificationError && verified && (
-                            <>
+                            <motion.div
+                                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                transition={{ duration: 0.35, type: "spring", stiffness: 120 }}
+                            >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="default" className="rounded flex items-center gap-1">
-                                            <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-green-700" />
+                                    <motion.div
+                                      className="flex items-center gap-2"
+                                      initial={{ opacity: 0, scale: 0.98 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      transition={{ delay: 0.13 }}
+                                    >
+                                        <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
+                                            <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
                                             Complete
                                         </Badge>
-                                        {exifPresent != null && (
-                                            <Badge variant={exifPresent ? "secondary" : "outline"} className="rounded">
-                                                EXIF {exifPresent ? "Present" : "Not found"}
-                                            </Badge>
-                                        )}
                                         {dims && (
-                                            <Badge variant="outline" className="rounded">
-                                                {dims.width}×{dims.height}px
-                                            </Badge>
+                                            <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
                                         )}
-                                    </div>
+                                    </motion.div>
                                 </div>
-
-                                <Separator className="my-4" />
-
-                                <div className="mb-4 rounded-md border p-4">
-                                    <div className="flex items-end justify-between">
+                                <Separator className="my-4 bg-white/10" />
+                                <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                         <div>
-                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Authenticity Score</div>
-                                            <div className="mt-1 text-3xl font-semibold">
-                                                {score != null ? `${score}` : "—"}
-                                                {score != null && <span className="ml-1 text-base text-muted-foreground">/100</span>}
+                                            <div className="text-xs uppercase tracking-wide text-zinc-400">Result</div>
+                                            <div className="mt-1 text-2xl font-bold flex items-end text-white">
+                                                <span>Verified on-chain</span>
                                             </div>
                                         </div>
-                                        {hashHex && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-2 bg-transparent"
-                                                onClick={() => copyToClipboard(hashHex)}
-                                                title="Copy SHA-256"
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                                Copy hash
-                                            </Button>
-                                        )}
-                                    </div>
-
-                                    {/* Minimal progress bar */}
-                                    <div className="mt-3 h-2 w-full overflow-hidden rounded bg-muted">
-                                        <div
-                                            className="h-full rounded bg-foreground transition-all"
-                                            style={{ width: `${Math.max(0, Math.min(100, score ?? 0))}%` }}
-                                        />
                                     </div>
                                 </div>
 
-                                <dl className="grid grid-cols-3 gap-3 text-sm">
-                                    <dt className="col-span-1 text-muted-foreground">File name</dt>
+                                <motion.dl
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="grid grid-cols-3 gap-4 text-sm"
+                                >
+                                    <dt className="col-span-1 text-zinc-400 font-semibold">File name</dt>
                                     <dd className="col-span-2 truncate">{file.name}</dd>
 
-                                    <dt className="col-span-1 text-muted-foreground">MIME type</dt>
+                                    <dt className="col-span-1 text-zinc-400 font-semibold">MIME type</dt>
                                     <dd className="col-span-2">{file.type || "image"}</dd>
 
-                                    <dt className="col-span-1 text-muted-foreground">Size</dt>
+                                    <dt className="col-span-1 text-zinc-400 font-semibold">Size</dt>
                                     <dd className="col-span-2">{formatBytes(file.size)}</dd>
 
-                                    <dt className="col-span-1 text-muted-foreground">Dimensions</dt>
+                                    <dt className="col-span-1 text-zinc-400 font-semibold">Dimensions</dt>
                                     <dd className="col-span-2">{dims ? `${dims.width} × ${dims.height}` : verified ? "Unknown" : "—"}</dd>
-
-                                    <dt className="col-span-1 text-muted-foreground">EXIF data</dt>
-                                    <dd className="col-span-2">
-                                        {exifPresent == null ? (verified ? "Unknown" : "—") : exifPresent ? "Present" : "Not found"}
-                                    </dd>
-
-                                    <dt className="col-span-1 text-muted-foreground">SHA-256</dt>
-                                    <dd className="col-span-2">
-                                        {hashHex ? (
-                                            <div className="max-w-full overflow-x-auto rounded bg-muted p-2 font-mono text-xs text-foreground">
-                                                {hashHex}
-                                            </div>
-                                        ) : verified ? (
-                                            "Unavailable"
-                                        ) : (
-                                            "—"
-                                        )}
-                                    </dd>
-                                </dl>
-                            </>
+                                </motion.dl>
+                            </motion.div>
                         )}
+                        </AnimatePresence>
                     </CardContent>
                 </Card>
-            </div>
+            </motion.div>
         </main>
     )
 }
 
-// Custom slow spin animation for loader
-// Add this somewhere in global styles or inline if required:
 /*
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px);} to { opacity: 1; transform: none; } }
 .animate-spin-slow { animation: spin 1.4s linear infinite;}
