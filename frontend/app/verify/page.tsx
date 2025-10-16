@@ -17,7 +17,8 @@ import { parseUnits } from "viem"
 import { readContract, simulateContract, writeContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
 import { motion } from "framer-motion"
-
+import { ethers } from 'ethers'
+import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
 type ImgDims = { width: number; height: number }
 
 // --- Mint price and contract order type constants from Solidity (see file_context_0) ---
@@ -89,13 +90,21 @@ const loaderSteps: { key: string; label: string }[] = [
     { key: "approve", label: "Approving tokens..." },
     { key: "order", label: "Placing order on-chain..." },
     { key: "api", label: "Finalizing with backend..." },
+    { key: "watcher", label: "Waiting for on-chain confirmation..." },
 ]
 
-// Helper: Current step index (0–3)
-function getActiveLoaderStep({ loadingApprove, loadingOrder, loadingApi, verifying }: any): number {
+// Updated to add watcher step (4)
+function getActiveLoaderStepExtended({
+    loadingApprove,
+    loadingOrder,
+    loadingApi,
+    verifying,
+    watcherActive,
+}: any): number {
     if (verifying && loadingApprove) return 1 // Approving tokens
     if (verifying && loadingOrder) return 2 // Placing order
     if (verifying && loadingApi) return 3 // API
+    if (watcherActive) return 4 // Awaiting watcher confirmation
     if (verifying && !loadingApprove && !loadingOrder && !loadingApi) return 0 // Hash image etc
     return -1
 }
@@ -116,14 +125,25 @@ export default function VerifyPage() {
     const [loadingOrder, setLoadingOrder] = React.useState(false)
     const [loadingApi, setLoadingApi] = React.useState(false)
 
+    const [verificationId, setVerificationId] = React.useState<string | null>(null)
+    // --- Verification Watcher additions ---
+    const { isVerified, loading: watcherLoading, error: watcherError, startWatcher } = useVerificationWatcher()
+    // Track if watcher is actively waiting for on-chain status
+    const [watcherActive, setWatcherActive] = React.useState(false)
 
     React.useEffect(() => {
-        api.get('/verifications').then((res) => console.log("Verification",res)).catch((e) => {
+        api.get('/verifications').then((res) => console.log("Verification", res)).catch((e) => {
             console.log(e)
         })
-    },[])
-    // For chat-like loader states
-    const [loaderMessages, setLoaderMessages] = React.useState<{ step: number, type: "loading" | "done", message: string }[]>([])
+    }, [])
+    React.useEffect(() => {
+        console.log(isVerified, watcherLoading, watcherError)
+    }, [isVerified, watcherLoading, watcherError])
+
+    // --- Loader message handling (extended for watcher) ---
+    const [loaderMessages, setLoaderMessages] = React.useState<
+        { step: number, type: "loading" | "done", message: string }[]
+    >([])
 
     const { address } = useAccount()
     const { writeContractAsync: writeApprove } = useWriteContract()
@@ -172,7 +192,6 @@ export default function VerifyPage() {
                 account: address,
             })
             await writeContract(config, request)
-            return true
         } catch (err) {
             console.error("Order create failed:", err)
             throw err
@@ -181,28 +200,55 @@ export default function VerifyPage() {
         }
     }
 
-    // Chat-like loader: step at which we are in verification
+    // Watcher flow: when new verificationId set, activate watcher loader, until watcher completes
+    React.useEffect(() => {
+        if (verificationId) {
+            setWatcherActive(true)
+        } else {
+            setWatcherActive(false)
+        }
+    }, [verificationId])
+
+    React.useEffect(() => {
+        // When watcher finishes, deactivate watcher loader step
+        if (watcherActive && !watcherLoading) {
+            setWatcherActive(false)
+            // Show complete UI after watcher success
+            if (isVerified) {
+                setVerified(true)
+            }
+        }
+        // If there's a watcher error, treat as error in UI
+        if (watcherError) {
+            setVerificationError("Failed waiting for on-chain confirmation" + (watcherError ? `: ${watcherError}` : ""))
+            setWatcherActive(false)
+        }
+        // eslint-disable-next-line
+    }, [watcherLoading, isVerified, watcherError])
+
+    // Chat-like loader: step at which we are in verification/watcher
     const [lastLoaderStep, setLastLoaderStep] = React.useState(-1)
 
     // Enhanced loader: Reset chat steps when verification is retried
     React.useEffect(() => {
-        if (!verifying) {
+        if (!verifying && !watcherActive) {
             setLoaderMessages([])
             setLastLoaderStep(-1)
         }
-    }, [verifying])
+    }, [verifying, watcherActive])
 
-    // Update chat messages as step changes
+    // Update chat messages as step changes (WITH WATCHER)
     React.useEffect(() => {
-        // Figure out which step is active
-        const activeLoaderStep = getActiveLoaderStep({
+        // Figure out which step is active (now includes watcher step)
+        const activeLoaderStep = getActiveLoaderStepExtended({
             loadingApprove,
             loadingOrder,
             loadingApi,
             verifying,
+            watcherActive
         });
         // If the step changed, update chat log
-        if (!verifying) return
+        if (!(verifying || watcherActive)) return
         if (activeLoaderStep !== lastLoaderStep) {
             setLoaderMessages((prev) => {
                 let updated = prev.slice();
@@ -228,7 +274,7 @@ export default function VerifyPage() {
             });
             setLastLoaderStep(activeLoaderStep);
         }
-    }, [verifying, loadingApprove, loadingOrder, loadingApi, lastLoaderStep])
+    }, [verifying, watcherActive, loadingApprove, loadingOrder, loadingApi, lastLoaderStep])
 
     const verifyImage = async () => {
         if (!file) {
@@ -293,6 +339,7 @@ export default function VerifyPage() {
             }
             if (!hasOrder) {
                 try {
+                    console.log("Creatibg Order")
                     await handleCreateOrder()
                 } catch (orderErr) {
                     setLoadingOrder(false)
@@ -311,6 +358,20 @@ export default function VerifyPage() {
             let res
             try {
                 res = await api.post("/verify", formData)
+                console.log(res)
+
+                const verificationId = res.data?.verificationId || res.data?.id
+                if (verificationId) {
+                    toast.success(`Verification request submitted (ID: ${verificationId})`)
+                    console.log("Verification Request ID:", verificationId)
+
+                    // Optionally store it in state
+                    setVerificationId(verificationId)
+
+                    // (Optional) Poll or fetch status from backend
+                    startWatcher(verificationId)
+                }
+
             } catch (apiErr: any) {
                 setLoadingApi(false)
                 const errMsg = apiErr?.response?.data?.error
@@ -322,20 +383,9 @@ export default function VerifyPage() {
             }
             setLoadingApi(false)
 
-            if (res?.data && res.data.success) {
-                toast.success("NFT Verified Successfully!")
-                setVerified(true)
-                setVerificationError(null)
-                return true
-            } else if (res?.data?.error) {
-                setVerificationError(res.data.error || "Failed to mint NFT")
-                toast.error(res.data.error || "Failed to mint NFT")
-                return false
-            } else {
-                setVerificationError("Failed to mint NFT (Unknown error)")
-                toast.error("Failed to mint NFT (Unknown error)")
-                return false
-            }
+            // Now, from here, watcherActive will be set, and UI will display loader until watcher signals complete
+            // Waiting for watcher to resolve sets `verified=true` elsewhere.
+            return true;
         } catch (error: any) {
             console.error("Verification error:", error)
             if (error?.response?.data?.error) {
@@ -404,22 +454,25 @@ export default function VerifyPage() {
         await verifyImage()
     }
 
+    // New overall loading for pipeline/watcher
     const overallLoading =
         verifying ||
         loadingApprove ||
         loadingOrder ||
-        loadingApi
+        loadingApi ||
+        watcherActive
 
-    // Step index for progress/pipeline bar
-    const activeLoaderStep = getActiveLoaderStep({
+    // Step index for progress/pipeline bar: extended for watcher
+    const activeLoaderStep = getActiveLoaderStepExtended({
         loadingApprove,
         loadingOrder,
         loadingApi,
         verifying,
+        watcherActive,
     })
 
-    // For smooth pipelined loader with progress % (25, 50, 75, 100)
-    const stepProgressPercent = [20, 40, 70, 98, 100][activeLoaderStep >= 0 ? activeLoaderStep : 0];
+    // For smooth pipelined loader with progress % (25, 50, 75, 95, 100)
+    const stepProgressPercent = [20, 40, 70, 93, 99, 100][activeLoaderStep >= 0 ? activeLoaderStep : 0];
 
     // Status string for mobile/progress fallback
     let loaderMessage = ""
@@ -427,55 +480,57 @@ export default function VerifyPage() {
         loaderMessage = loaderSteps[activeLoaderStep].label
     } else if (verifying) {
         loaderMessage = "Verifying..."
+    } else if (watcherActive) {
+        loaderMessage = "Waiting for on-chain confirmation..."
     }
 
     // Chat-like Loader display for VERIFICATION details panel (right-side)
     function ChatLoaderPipeline() {
         return (
             <div className="w-full flex flex-col items-start gap-2 pb-2 text-sm">
-              {loaderMessages.map((msg, i) => {
-                // Only animate the *last* (new) message
-                const isNewest = i === loaderMessages.length - 1;
-                if (isNewest) {
-                  return (
-                    <motion.span
-                      key={msg.step}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        delay: i * 0.06,
-                        duration: 0.28,
-                        type: "spring",
-                        stiffness: 122,
-                      }}
-                      className={
-                        msg.type === "done"
-                          ? "text-green-700 font-medium"
-                          : "text-gray-400"
-                      }
-                    >
-                      {msg.type === "done"
-                        ? msg.message.replace("...", " ✓")
-                        : msg.message}
-                    </motion.span>
-                  );
-                } else {
-                  return (
-                    <span
-                      key={msg.step}
-                      className={
-                        msg.type === "done"
-                          ? "text-green-700 font-medium"
-                          : "text-gray-400"
-                      }
-                    >
-                      {msg.type === "done"
-                        ? msg.message.replace("...", " ✓")
-                        : msg.message}
-                    </span>
-                  );
-                }
-              })}
+                {loaderMessages.map((msg, i) => {
+                    // Only animate the *last* (new) message
+                    const isNewest = i === loaderMessages.length - 1;
+                    if (isNewest) {
+                        return (
+                            <motion.span
+                                key={msg.step}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{
+                                    delay: i * 0.06,
+                                    duration: 0.28,
+                                    type: "spring",
+                                    stiffness: 122,
+                                }}
+                                className={
+                                    msg.type === "done"
+                                        ? "text-green-700 font-medium"
+                                        : "text-gray-400"
+                                }
+                            >
+                                {msg.type === "done"
+                                    ? msg.message.replace("...", " ✓")
+                                    : msg.message}
+                            </motion.span>
+                        );
+                    } else {
+                        return (
+                            <span
+                                key={msg.step}
+                                className={
+                                    msg.type === "done"
+                                        ? "text-green-700 font-medium"
+                                        : "text-gray-400"
+                                }
+                            >
+                                {msg.type === "done"
+                                    ? msg.message.replace("...", " ✓")
+                                    : msg.message}
+                            </span>
+                        );
+                    }
+                })}
             </div>
         );
     }
@@ -485,7 +540,7 @@ export default function VerifyPage() {
         return (
             <div className="flex flex-col gap-5 items-center justify-center rounded-lg border p-8 shadow-md">
                 <div className="flex items-center gap-2 text-red-600">
-                    <AlertTriangle className="h-6 w-6" strokeWidth={2.4}/>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={2.4} />
                     <span className="text-lg font-bold">Verification Failed</span>
                 </div>
                 <div className="w-full text-center text-red-700 font-normal text-base break-words">
@@ -498,7 +553,7 @@ export default function VerifyPage() {
                     onClick={retry}
                     disabled={disabled}
                 >
-                    <RefreshCcw className="h-4 w-4 mr-0.5"/>
+                    <RefreshCcw className="h-4 w-4 mr-0.5" />
                     Retry
                 </Button>
                 <div className="mt-4 flex flex-col items-center text-xs text-gray-500 text-center gap-1 leading-tight">
@@ -514,7 +569,7 @@ export default function VerifyPage() {
         )
     }
 
-    // Keep the original LoaderPipeline for left panel (compact UI) but show chat on Verification side!
+    // LoaderPipeline for left panel (could be compact progress bar, not shown here), chat for details panel
 
     return (
         <main className="p-6 md:p-8">
@@ -606,7 +661,7 @@ export default function VerifyPage() {
                                 Clear
                             </Button>
                         </div>
-                        
+
                     </CardContent>
                 </Card>
 
@@ -631,15 +686,7 @@ export default function VerifyPage() {
                         {file && overallLoading && (
                             <div className="flex flex-col items-start justify-start min-h-[260px] w-full sm:px-6">
                                 <ChatLoaderPipeline />
-                                {/* Minimal progress bar */}
-                                {/* <div className="w-full max-w-xs mx-auto mt-8 mb-2">
-                                    <div className="relative h-2.5 rounded-lg overflow-hidden bg-muted border">
-                                        <div
-                                            className="absolute left-0 top-0 h-full rounded-lg bg-gradient-to-r from-primary/80 via-primary to-primary/70 transition-all duration-300"
-                                            style={{ width: `${stepProgressPercent || 20}%` }}
-                                        ></div>
-                                    </div>
-                                </div> */}
+                                {/* Optionally, a progress bar can be shown here */}
                             </div>
                         )}
 
