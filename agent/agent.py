@@ -1,13 +1,127 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import asyncio
-import os
+import asyncio, os, requests, json, base64
 from web3 import Web3
 from uagents import Agent, Context
-from qdrant import ensure_qdrant_collection, create_point, search_points, get_embeddings, point_exists
-from abi import REALIA_FACTORY_ABI, REALIA_NFT_ABI, ERC20_ABI, VerificationResult
-# --- Setup ---
+
+# ============================================================================
+# ABI Definitions
+# ============================================================================
+
+# VerificationResult enum values (matching the Solidity enum)
+class VerificationResult:
+    NONE = 0
+    VERIFIED = 1
+    MODIFIED = 2
+    NOT_VERIFIED = 3
+
+# OrderType enum values (matching the Solidity enum)
+class OrderType:
+    NONE = 0
+    MINT = 1
+    VERIFY = 2
+
+# RealiaFactory ABI - contains only the functions/events used by the agent
+REALIA_FACTORY_ABI = [
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "address", "name": "user", "type": "address"}, {"indexed": False, "internalType": "uint256", "name": "requestId", "type": "uint256"}], "name": "VerificationRequested", "type": "event"},
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "address", "name": "agent", "type": "address"}, {"indexed": False, "internalType": "uint256", "name": "requestId", "type": "uint256"}, {"indexed": False, "internalType": "bool", "name": "verified", "type": "bool"}], "name": "VerificationResponseByAgent", "type": "event"},
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "address", "name": "agent", "type": "address"}], "name": "AgentRegistered", "type": "event"},
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "address", "name": "agent", "type": "address"}, {"indexed": False, "internalType": "string", "name": "agentAddress", "type": "string"}], "name": "AgentAddressUpdated", "type": "event"},
+    {"inputs": [], "name": "MIN_AGENT_STAKING", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "PYUSD", "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "address", "name": "", "type": "address"}], "name": "agents", "outputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}, {"internalType": "address", "name": "evmAddress", "type": "address"}, {"internalType": "uint256", "name": "verifiedCount", "type": "uint256"}, {"internalType": "bool", "name": "isStaked", "type": "bool"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "registerAgent", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "updateAgentAddress", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "name": "verificationRequests", "outputs": [{"internalType": "address", "name": "user", "type": "address"}, {"internalType": "string", "name": "uri", "type": "string"}, {"internalType": "bool", "name": "processed", "type": "bool"}, {"internalType": "uint256", "name": "requestTime", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}, {"internalType": "enum VerificationResult", "name": "result", "type": "uint8"}, {"internalType": "uint256", "name": "propertyTokenId", "type": "uint256"}], "name": "responseVerification", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [], "name": "syncAgent", "outputs": [{"internalType": "uint256", "name": "totalCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "nftIds", "type": "uint256[]"}, {"internalType": "string[]", "name": "nftUris", "type": "string[]"}], "stateMutability": "view", "type": "function"}
+]
+
+# RealiaNFT ABI - contains only the functions/events used by the agent
+REALIA_NFT_ABI = [
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "address", "name": "to", "type": "address"}, {"indexed": False, "internalType": "uint256", "name": "tokenId", "type": "uint256"}], "name": "Minted", "type": "event"},
+    {"inputs": [{"internalType": "uint256", "name": "_tokenId", "type": "uint256"}], "name": "tokenURI", "outputs": [{"internalType": "string", "name": "", "type": "string"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "tokenId", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"}
+]
+
+# ERC20 ABI for PYUSD token interactions
+ERC20_ABI = [
+    {"inputs": [{"internalType": "address", "name": "account", "type": "address"}], "name": "balanceOf", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "address", "name": "spender", "type": "address"}, {"internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "approve", "outputs": [{"internalType": "bool", "name": "", "type": "bool"}], "stateMutability": "nonpayable", "type": "function"}
+]
+
+# Legacy compatibility - for code that uses REALIA_ABI
+REALIA_ABI = REALIA_FACTORY_ABI
+
+# ============================================================================
+# Qdrant Functions
+# ============================================================================
+
+def ensure_qdrant_collection():
+    BASE_URL = os.getenv("QDRANT_BASE_URL")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    r = requests.get(f"{BASE_URL}/collections/realia", headers={"api-key": QDRANT_API_KEY})
+    if r.status_code != 200:
+        payload = {"vectors": {"size": 512, "distance": "Cosine"}}
+        res = requests.put(f"{BASE_URL}/collections/realia", headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY}, data=json.dumps(payload))
+        return "created"
+    else:
+        return "already exists"
+
+def create_point(id, vector, payload=None):
+    BASE_URL = os.getenv("QDRANT_BASE_URL")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    data = {"points": [{"id": id, "vector": vector, "payload": payload or {}}]}
+    r = requests.put(f"{BASE_URL}/collections/realia/points",
+                     headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
+                     data=json.dumps(data))
+    return r.json()
+
+def search_points(vector, limit=5):
+    BASE_URL = os.getenv("QDRANT_BASE_URL")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    data = {"vector": vector, "limit": limit}
+    r = requests.post(f"{BASE_URL}/collections/realia/points/search",
+                      headers={"Content-Type": "application/json", "api-key": QDRANT_API_KEY},
+                      data=json.dumps(data))
+    return r.json()
+
+def ipfs_to_https(uri):
+    if uri.startswith("ipfs://"):
+        return uri.replace("ipfs://", "https://ipfs.io/ipfs/")
+    return uri
+
+def get_embeddings(uri):
+    EMBEDDING_URL = os.getenv("EMBEDDING_URL")
+    r = requests.get(ipfs_to_https(uri))
+    imageLink = r.json()["image"]
+    r = requests.get(ipfs_to_https(imageLink))
+    b64 = base64.b64encode(r.content).decode("utf-8")
+    payload = {"image": b64}
+    r = requests.post(EMBEDDING_URL, json=payload)
+    embedding = r.json()["embedding"]
+    return embedding
+
+def get_point_count():
+    BASE_URL = os.getenv("QDRANT_BASE_URL")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    r = requests.get(f"{BASE_URL}/collections/realia",
+                     headers={"api-key": QDRANT_API_KEY})
+    if r.status_code == 200:
+        return r.json()["result"]["points_count"]
+    return 0
+
+def point_exists(point_id):
+    BASE_URL = os.getenv("QDRANT_BASE_URL")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    r = requests.get(f"{BASE_URL}/collections/realia/points/{point_id}",
+                     headers={"api-key": QDRANT_API_KEY})
+    return r.status_code == 200
+
+# ============================================================================
+# Agent Setup
+# ============================================================================
 ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
 FACTORY_ADDRESS = os.getenv("REALIA_FACTORY_CONTRACT_ADDRESS")
 NFT_ADDRESS = os.getenv("REALIA_NFT_CONTRACT_ADDRESS")

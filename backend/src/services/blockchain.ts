@@ -23,8 +23,7 @@ export const mintNFT = async (to: string, uri: string): Promise<string | null> =
                 return parsed.args[1].toString();
               }
             } catch (error) {
-                console.error(error);
-                throw error;
+                continue;
             }
             }
 
