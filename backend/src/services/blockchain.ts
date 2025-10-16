@@ -19,9 +19,7 @@ export const mintNFT = async (to: string, uri: string): Promise<string | null> =
         for (const log of receipt.logs) {
             try {
               const parsed = realiaNFT_contract.interface.parseLog(log);
-              console.log(parsed);
               if (parsed && parsed.name === "Minted") {
-                console.log(parsed.args);
                 return parsed.args[1].toString();
               }
             } catch (error) {
