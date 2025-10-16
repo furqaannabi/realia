@@ -16,7 +16,7 @@ import ERC20ABI from "@/app/utils/web3/ERC20.json"
 import { parseUnits } from "viem"
 import { readContract, simulateContract, writeContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence } from "framer-motion"
 import { ethers } from 'ethers'
 import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
 type ImgDims = { width: number; height: number }
@@ -398,17 +398,8 @@ export default function VerifyPage() {
             <div className="w-full flex flex-col items-start gap-2 pb-2 text-sm">
                 <AnimatePresence mode="wait">
                 {loaderMessages.map((msg, i) => (
-                        <motion.span
+                        <span
                             key={msg.step}
-                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            transition={{
-                                delay: i * 0.05,
-                                duration: 0.32,
-                                type: "spring",
-                                stiffness: 150,
-                            }}
                             className={`rounded-full px-3 py-1 mb-0.5 shadow ${
                                 msg.type === "done"
                                     ? "bg-black text-white font-bold border border-white/10"
@@ -418,7 +409,7 @@ export default function VerifyPage() {
                             {msg.type === "done"
                                 ? msg.message.replace("...", " ✓")
                                 : msg.message}
-                        </motion.span>
+                        </span>
                     ))}
                 </AnimatePresence>
             </div>
@@ -427,19 +418,14 @@ export default function VerifyPage() {
 
     function ErrorDisplay({ err, retry, disabled }: { err: string, retry: () => void, disabled: boolean }) {
         return (
-            <motion.div
-                initial={{ scale: 0.98, opacity: 0, y: 12 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
+            <div
                 className="relative flex flex-col bg-gradient-to-bl from-zinc-900/80 via-zinc-700/30 to-zinc-600/10 backdrop-blur gap-5 items-center justify-center rounded-xl border-2 border-white/10 p-8 shadow-2xl overflow-hidden"
             >
-                <motion.div
-                    initial={{ scale: 0.7, y: -24, opacity: 0 }}
-                    animate={{ scale: 1, y: 0, opacity: 1 }}
-                    transition={{ type: "spring", duration: 0.4, delay: 0.06 }}
+                <div
                     className="absolute left-3 top-3 opacity-20"
                 >
                     <AlertTriangle className="h-14 w-14 text-black/60" strokeWidth={2.5} />
-                </motion.div>
+                </div>
                 <div className="flex items-center gap-2 text-zinc-100 bg-zinc-800/80 px-4 py-2 rounded-lg shadow font-bold">
                     <AlertTriangle className="h-6 w-6 text-white/70" strokeWidth={2.2} />
                     <span className="text-lg font-bold">Verification Failed</span>
@@ -466,17 +452,14 @@ export default function VerifyPage() {
                         &nbsp;or refresh.
                     </p>
                 </div>
-            </motion.div>
+            </div>
         )
     }
 
     // --- Upload+Preview Card ---
     return (
         <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
-            <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.34, type: "spring", stiffness: 170 }}
+            <div
                 className="mb-8"
             >
                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-pretty text-white drop-shadow-xl">
@@ -485,12 +468,9 @@ export default function VerifyPage() {
                 <p className="mt-1 text-base text-zinc-300 max-w-2xl font-medium drop-shadow-sm">
                     Upload an image and verify authenticity on-chain. Secure, modern, decentralized.
                 </p>
-            </motion.div>
-            <motion.div
+            </div>
+            <div
                 className="grid gap-8 lg:grid-cols-2"
-                initial={{ opacity: 0, y: 32 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.11, duration: 0.4 }}
             >
                 {/* Upload + Preview CARD */}
                 <Card className="relative border-2 border-white/10 bg-gradient-to-br from-zinc-950 via-zinc-900/90 to-black/90 backdrop-blur rounded-2xl shadow-xl shadow-black/20 overflow-hidden text-white">
@@ -524,9 +504,7 @@ export default function VerifyPage() {
                                 }}
                             />
                             {!previewUrl ? (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.96 }}
-                                    animate={{ opacity: 1, scale: 1 }}
+                                <div
                                     className="flex flex-col items-center text-center text-sm text-zinc-100/70"
                                 >
                                     <div className="mb-3 rounded-xl border-2 border-zinc-800 bg-black/50 p-5 shadow-lg">
@@ -534,11 +512,9 @@ export default function VerifyPage() {
                                     </div>
                                     <span className="font-semibold text-white">Drag & drop an image</span>
                                     <span className="mt-1 text-zinc-200/60">or click to browse (JPG, PNG…)</span>
-                                </motion.div>
+                                </div>
                             ) : (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.97 }}
-                                    animate={{ opacity: 1, scale: 1 }}
+                                <div
                                     className="relative h-full w-full overflow-hidden rounded-xl border border-zinc-800/80 shadow-xl"
                                     style={{
                                         background:
@@ -555,16 +531,14 @@ export default function VerifyPage() {
                                     <span className="absolute bottom-3 right-3 text-xs bg-zinc-900/60 rounded px-3 py-1 text-zinc-300/70 tracking-wide shadow-sm border border-zinc-700/40">
                                         Preview
                                     </span>
-                                </motion.div>
+                                </div>
                             )}
                             {!previewUrl && (
                                 <div className="pointer-events-none absolute inset-0 rounded-xl ring-0 transition group-hover:ring-2 group-hover:ring-white/10" />
                             )}
                         </label>
                         {file ? (
-                            <motion.div
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
+                            <div
                                 className="mt-5 flex items-center gap-2 px-1 py-1 text-xs text-zinc-300 bg-zinc-900/60 rounded-lg shadow-inner border border-white/10"
                             >
                                 <ImageIcon className="h-4 w-4 text-zinc-400" />
@@ -572,7 +546,7 @@ export default function VerifyPage() {
                                 <span>
                                     &bull; {file.type || "image"} &bull; {formatBytes(file.size)}
                                 </span>
-                            </motion.div>
+                            </div>
                         ) : null}
 
                         <div className="mt-6 flex gap-3">
@@ -611,34 +585,28 @@ export default function VerifyPage() {
                     </CardHeader>
                     <CardContent>
                         {!file && (
-                            <motion.div
+                            <div
                                 className="flex items-start gap-3 rounded-xl border-2 border-dashed border-white/10 p-6 mt-2 text-base text-zinc-300 bg-black/30 shadow-inner"
-                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                             >
                                 <UploadCloud className="mt-0.5 h-4 w-4 text-zinc-400" />
                                 <div>
                                     Drop an image on the left to see its dimensions and verification status.
                                 </div>
-                            </motion.div>
+                            </div>
                         )}
                         <AnimatePresence>
                         {file && overallLoading && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 8 }}
+                            <div
                                 className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
                             >
                                 <ChatLoaderPipeline />
                                 <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${stepProgressPercent}%` }}
-                                        transition={{ duration: 0.6, type: "spring", stiffness: 150}}
+                                    <div
                                         className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
+                                        style={{ width: `${stepProgressPercent}%` }}
                                     />
                                 </div>
-                            </motion.div>
+                            </div>
                         )}
                         </AnimatePresence>
                         <AnimatePresence>
@@ -648,18 +616,11 @@ export default function VerifyPage() {
                         </AnimatePresence>
                         <AnimatePresence>
                         {file && !overallLoading && !verificationError && verified && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                transition={{ duration: 0.35, type: "spring", stiffness: 120 }}
+                            <div
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <motion.div
+                                    <div
                                       className="flex items-center gap-2"
-                                      initial={{ opacity: 0, scale: 0.98 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      transition={{ delay: 0.13 }}
                                     >
                                         <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
                                             <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
@@ -668,7 +629,7 @@ export default function VerifyPage() {
                                         {dims && (
                                             <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
                                         )}
-                                    </motion.div>
+                                    </div>
                                 </div>
                                 <Separator className="my-4 bg-white/10" />
                                 <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
@@ -682,9 +643,7 @@ export default function VerifyPage() {
                                     </div>
                                 </div>
 
-                                <motion.dl
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
+                                <dl
                                     className="grid grid-cols-3 gap-4 text-sm"
                                 >
                                     <dt className="col-span-1 text-zinc-400 font-semibold">File name</dt>
@@ -698,13 +657,13 @@ export default function VerifyPage() {
 
                                     <dt className="col-span-1 text-zinc-400 font-semibold">Dimensions</dt>
                                     <dd className="col-span-2">{dims ? `${dims.width} × ${dims.height}` : verified ? "Unknown" : "—"}</dd>
-                                </motion.dl>
-                            </motion.div>
+                                </dl>
+                            </div>
                         )}
                         </AnimatePresence>
                     </CardContent>
                 </Card>
-            </motion.div>
+            </div>
         </main>
     )
 }

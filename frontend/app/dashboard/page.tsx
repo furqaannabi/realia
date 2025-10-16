@@ -1,7 +1,7 @@
 "use client"
 
 import { GlassCard } from "@/components/card"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence } from "framer-motion"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -71,25 +71,15 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.34, type: "spring", stiffness: 170 }}
-        className="mb-8"
-      >
+      <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-pretty text-white drop-shadow-xl">
           Dashboard Overview
         </h1>
         <p className="mt-1 text-base text-zinc-300 max-w-2xl font-medium drop-shadow-sm">
           Track authenticity verifications and the pulse of the Realia network.
         </p>
-      </motion.div>
-      <motion.div
-        className="grid gap-8 lg:grid-cols-3"
-        initial={{ opacity: 0, y: 32 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.09, duration: 0.4 }}
-      >
+      </div>
+      <div className="grid gap-8 lg:grid-cols-3">
         {/* Main Featured NFT */}
         <GlassCard className="col-span-2 p-0 overflow-hidden">
           <div className="relative">
@@ -125,17 +115,14 @@ export default function DashboardPage() {
             <Separator className="mb-3 bg-white/10" />
             <div className="grid grid-cols-2 gap-3">
               {stats.map((s, i) => (
-                <motion.div
+                <div
                   key={s.label}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 + 0.07 }}
                   className="rounded-lg border border-white/10 bg-black/20 p-3"
                 >
                   <div className="text-[11px] uppercase tracking-wide text-zinc-400">{s.label}</div>
                   <div className="text-lg font-bold text-white">{s.value}</div>
                   <div className="text-[11px] text-zinc-300/80">{s.delta}</div>
-                </motion.div>
+                </div>
               ))}
             </div>
           </GlassCard>
@@ -151,22 +138,13 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2">
               <AnimatePresence>
                 {queue.length === 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="text-sm text-zinc-400 text-center py-3"
-                  >
+                  <div className="text-sm text-zinc-400 text-center py-3">
                     No pending images at the moment!
-                  </motion.div>
+                  </div>
                 ) : (
                   queue.map((q, i) => (
-                    <motion.div
+                    <div
                       key={i}
-                      initial={{ opacity: 0, x: 8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 12 }}
-                      transition={{ delay: i * 0.06 + 0.13 }}
                       className="flex items-center gap-3"
                     >
                       <div className="h-10 w-10 overflow-hidden rounded-md shadow ring-1 ring-white/10">
@@ -180,21 +158,16 @@ export default function DashboardPage() {
                         <div className="truncate text-xs text-zinc-400">{q.note}</div>
                       </div>
                       <div className="text-xs text-zinc-300">{q.eta}</div>
-                    </motion.div>
+                    </div>
                   ))
                 )}
               </AnimatePresence>
             </div>
           </GlassCard>
         </div>
-      </motion.div>
+      </div>
       {/* Recent Mints */}
-      <motion.div
-        className="space-y-4 mt-8"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.18, duration: 0.35 }}
-      >
+      <div className="space-y-4 mt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white flex gap-2 items-center">
             <ImageIcon className="h-5 w-5 text-sky-400/80" /> Recent Mints
@@ -206,11 +179,8 @@ export default function DashboardPage() {
         <Separator className="mb-2 bg-white/10" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {recentMints.map((item, idx) => (
-            <motion.div
+            <div
               key={item.nftId}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.03 * idx + 0.25 }}
             >
               <GlassCard className="p-0 overflow-hidden border-2 border-white/10 bg-gradient-to-br from-black/85 via-zinc-900/60 to-black/80">
                 <div className="relative">
@@ -236,10 +206,10 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </GlassCard>
-            </motion.div>
+            </div>
           ))}
         </div>
-      </motion.div>
+      </div>
     </main>
   )
 }

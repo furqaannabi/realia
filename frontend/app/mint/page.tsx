@@ -17,7 +17,7 @@ import RealiaABI from "@/app/utils/web3/Realia.json";
 import ERC20ABI from "@/app/utils/web3/ERC20.json";
 import { signMessage, simulateContract, writeContract, readContract } from "@wagmi/core"
 import { config } from "../utils/wallet"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence } from "framer-motion"
 
 // --- Mint price and contract order type constants from Solidity (see file_context_0) ---
 const MINT_PRICE = "1"; // 1e6 (6 decimals), string for parseUnits
@@ -213,25 +213,15 @@ export default function MintPage() {
 
   return (
     <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.34, type: "spring", stiffness: 170 }}
-        className="mb-8"
-      >
+      <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-pretty text-white drop-shadow-xl">
           Mint Authenticity NFT
         </h1>
         <p className="mt-1 text-base text-zinc-300 max-w-2xl font-medium drop-shadow-sm">
           Mint your authenticity NFT instantly on-chain. Secure, modern, decentralized.
         </p>
-      </motion.div>
-      <motion.div
-        className="grid gap-8 lg:grid-cols-2"
-        initial={{ opacity: 0, y: 32 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.11, duration: 0.4 }}
-      >
+      </div>
+      <div className="grid gap-8 lg:grid-cols-2">
         {/* Upload + Preview CARD (left) */}
         <Card className="relative border-2 border-white/10 bg-gradient-to-br from-zinc-950 via-zinc-900/90 to-black/90 backdrop-blur rounded-2xl shadow-xl shadow-black/20 overflow-hidden text-white">
           <CardHeader className="pb-4 flex items-center gap-2 bg-gradient-to-r from-zinc-950/40 to-zinc-900/70 rounded-t-2xl shadow-inner">
@@ -295,12 +285,8 @@ export default function MintPage() {
               )}
               <AnimatePresence>
                 {minted && (
-                  <motion.div
+                  <div
                     key="mint-result"
-                    initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.4, type: "spring", stiffness: 120 }}
                     className="space-y-3"
                   >
                     <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow w-fit">
@@ -325,7 +311,7 @@ export default function MintPage() {
                         <span className="text-white/90">{minted.timestamp}</span>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
             </CardContent>
@@ -360,7 +346,7 @@ export default function MintPage() {
             )}
           </div>
         </div>
-      </motion.div>
+      </div>
     </main>
   )
 }
