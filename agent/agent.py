@@ -1,11 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import asyncio
-import os
-import requests
-import json
-import base64
+import asyncio, os, requests, json, base64
 from web3 import Web3
 from uagents import Agent, Context
 
