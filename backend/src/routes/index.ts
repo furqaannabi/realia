@@ -110,7 +110,6 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
 
         res.status(201).json({
             success: true,
-            nft,
             tokenId,
             ipfsUrl: `ipfs://${media.imageCid}`,
             imageUrl: media.key
