@@ -11,22 +11,22 @@ from abi import REALIA_FACTORY_ABI, REALIA_NFT_ABI, ERC20_ABI, VerificationResul
 ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
 FACTORY_ADDRESS = os.getenv("REALIA_FACTORY_CONTRACT_ADDRESS")
 NFT_ADDRESS = os.getenv("REALIA_NFT_CONTRACT_ADDRESS")
-SEED = os.getenv("SEED")
+WALLET_SEED = os.getenv("WALLET_SEED")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL")
-AGENT_PRIVATE_KEY = os.getenv("AGENT_PRIVATE_KEY")
+WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
 
 w3 = Web3(Web3.HTTPProvider(f"https://arb-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"))
 factory_contract = w3.eth.contract(address=FACTORY_ADDRESS, abi=REALIA_FACTORY_ABI)
 nft_contract = w3.eth.contract(address=NFT_ADDRESS, abi=REALIA_NFT_ABI)
 
 # Setup agent wallet
-agent_account = w3.eth.account.from_key(AGENT_PRIVATE_KEY)
+agent_account = w3.eth.account.from_key(WALLET_PRIVATE_KEY)
 AGENT_EVM_ADDRESS = agent_account.address
 
 # --- Agent Setup ---
-agent = Agent(name="realia_agent", seed=SEED, port=8001)
+agent = Agent(name="realia_agent", seed=WALLET_SEED, port=8001)
 
 async def check_and_register_agent(ctx: Context):
     """Check if agent is registered, if not attempt to register"""

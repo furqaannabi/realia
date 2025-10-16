@@ -635,7 +635,7 @@
   "linkReferences": {},
   "deployedLinkReferences": {},
   "immutableReferences": {
-    "8427": [
+    "8439": [
       {
         "length": 32,
         "start": 509
@@ -659,5 +659,5 @@
     ]
   },
   "inputSourceName": "project/contracts/RealiaNFT.sol",
-  "buildInfoId": "solc-0_8_28-41c7856972a5d2785d7414af00482a67f27dca0e"
+  "buildInfoId": "solc-0_8_28-488aced9f488c3e12f534d4f9214eda4d8b3c9a4"
 }
