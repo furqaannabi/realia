@@ -24,30 +24,51 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * POST /mint
- * Mint a new NFT
+ * Mint a new NFT with SSE for real-time progress updates
  * @param req - The request object
  * @param res - The response object
- * @returns The NFT
+ * @returns Server-Sent Events stream
  */
 router.post('/mint', sessionMiddleware, upload.single('image') as any, async (req: Request, res: Response) => {
+    // Setup SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const sendEvent = (event: string, data: any) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const sendError = (message: string, status: number = 500) => {
+        sendEvent('error', { error: message, status });
+        res.end();
+    };
+
     try {
+        sendEvent('progress', { step: 'validating_file', message: 'Validating image file...' });
+
         if (!req.file || !req.file.mimetype.startsWith('image/')) {
-            res.status(400).json({ error: 'No image file provided' });
+            sendError('No image file provided', 400);
             return;
         }
 
+        sendEvent('progress', { step: 'validating_data', message: 'Validating request data...' });
+
         const validationResult = mintNFTSchema.safeParse(JSON.parse(req.body.data));
         if (!validationResult.success) {
-            res.status(400).json({
-                error: 'Validation failed',
-                details: validationResult.error.issues
-            });
+            sendError('Validation failed: ' + JSON.stringify(validationResult.error.issues), 400);
             return;
         }
 
         const { name, description } = validationResult.data;
 
+        sendEvent('progress', { step: 'generating_embedding', message: 'Generating image embedding...' });
+
         const embedding = await getEmbedding(req.file.buffer);
+
+        sendEvent('progress', { step: 'checking_duplicates', message: 'Checking for similar images...' });
 
         const similarImages = await qdrantClient.query("images", {
             query: embedding,
@@ -57,22 +78,29 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             },
             limit: 5,
         });
+        
         if (similarImages.points.filter((image: any) => image.score > 0.94).length > 0) {
-            res.status(400).json({ error: 'Image already exists' });
+            sendError('Image already exists', 400);
             return;
         }
+
+        sendEvent('progress', { step: 'ai_detection', message: 'Checking if image is AI-generated...' });
 
         const isAI = await getAIOrOriginalUrl(req.file.buffer);
         if (isAI) {
-            res.status(400).json({ error: 'Image is AI generated' });
+            sendError('Image is AI generated', 400);
             return;
         }
 
+        sendEvent('progress', { step: 'checking_order', message: 'Verifying mint order...' });
+
         const hasMintOrder = await hasOrder(req.user.walletAddress, OrderType.MINT);
         if (!hasMintOrder) {
-            res.status(403).json({ error: 'User does not have a mint order' });
+            sendError('User does not have a mint order', 403);
             return;
         }
+
+        sendEvent('progress', { step: 'uploading_media', message: 'Uploading to IPFS and S3...' });
 
         const metadata = {
             name,
@@ -82,12 +110,16 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
 
         const media = await uploadMedia(req.file, metadata);
 
+        sendEvent('progress', { step: 'minting_nft', message: 'Minting NFT on blockchain...' });
+
         const tokenId = await mintNFT(req.user.walletAddress, `ipfs://${media.metadataCid}`);
 
         if (!tokenId) {
-            res.status(500).json({ error: 'Failed to mint NFT' });
+            sendError('Failed to mint NFT', 500);
             return;
         }
+
+        sendEvent('progress', { step: 'storing_embedding', message: 'Storing image embedding...' });
 
         const qdrantId = uuidv4();
 
@@ -96,6 +128,8 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
                 { id: qdrantId, vector: embedding }
             ]
         });
+
+        sendEvent('progress', { step: 'saving_database', message: 'Saving to database...' });
 
         const nft = await prisma.nFT.create({
             data: {
@@ -108,7 +142,7 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             }
         });
 
-        res.status(201).json({
+        sendEvent('complete', {
             success: true,
             tokenId,
             nft,
@@ -116,9 +150,11 @@ router.post('/mint', sessionMiddleware, upload.single('image') as any, async (re
             imageUrl: media.key
         });
 
+        res.end();
+
     } catch (error) {
         console.error('Mint error:', error);
-        res.status(500).json({ error: 'Failed to mint NFT' });
+        sendError('Failed to mint NFT: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
 });
 

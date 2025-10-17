@@ -55,17 +55,16 @@ export const getPresignedUrl = async (key: string): Promise<string> => {
 };
 
 export const getAIOrOriginalUrl = async (buffer: Buffer): Promise<boolean> => {
-    /*const formData = new FormData();
+    const formData = new FormData();
     formData.append('image', new File([buffer], 'image.png', { type: 'image/png' }));
     const response = await axios.post('https://api.aiornot.com/v2/image/sync', formData, {
         headers: {
             'Authorization': `Bearer ${process.env.AIORNOT_API_KEY}`,
         },
     });
-
     if (response.data.report.ai_generated.verdict === 'ai') {
         return true;
-    }*/
+    }
     return false;
 };
 
