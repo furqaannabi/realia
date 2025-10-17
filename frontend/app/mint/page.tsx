@@ -19,15 +19,22 @@ import { signMessage, simulateContract, writeContract, readContract } from "@wag
 import { config } from "../utils/wallet"
 import { AnimatePresence } from "framer-motion"
 
-// --- Mint price and contract order type constants from Solidity (see file_context_0) ---
-const MINT_PRICE = "1"; // 1e6 (6 decimals), string for parseUnits
+const MINT_PRICE = "1";
 const ORDER_TYPE_MINT = 1;
 
-type MintInfo = {
+type NFT = {
   id: string
+}
+type MintInfo = {
+  nftId: string,
   imageHash: string
   ipfs: string
   timestamp: string
+  imageUrl: string
+  tokenId: string
+  metadataCid: string
+  name?: string
+  description?: string
 }
 
 export default function MintPage() {
@@ -37,10 +44,13 @@ export default function MintPage() {
   const [minting, setMinting] = useState(false)
   const [status, setStatus] = useState<string>("")
 
+  const [nftName, setNftName] = useState<string>("")
+  const [nftDescription, setNftDescription] = useState<string>("")
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+
   const { address } = useAccount()
   const { writeContractAsync: writeApprove } = useWriteContract()
 
-  // Returns a number, not boolean. Used by 'hasOrder' below.
   const hasMintOrder = async () => {
     if (!address) return false
     try {
@@ -50,7 +60,6 @@ export default function MintPage() {
         functionName: "hasOrder",
         args: [address, ORDER_TYPE_MINT],
       })
-      // Solidity returns a boolean
       return !!hasOrder
     } catch (err) {
       console.error("Failed to check hasOrder:", err)
@@ -58,7 +67,6 @@ export default function MintPage() {
     }
   }
 
-  // Approve full price to contract
   const handleApprove = async () => {
     try {
       setStatus("Approving PYUSD for mint...")
@@ -66,7 +74,7 @@ export default function MintPage() {
         address: PYUSD_ADDRESS,
         abi: ERC20ABI,
         functionName: "approve",
-        args: [REALIA_ADDRESS, parseUnits(MINT_PRICE, 6)], // 6 decimals for PYUSD
+        args: [REALIA_ADDRESS, parseUnits(MINT_PRICE, 6)],
       })
       setStatus("Approve succeeded.")
     } catch (err) {
@@ -76,7 +84,6 @@ export default function MintPage() {
     }
   }
 
-  // Use writeContract directly: For createOrder.
   const handleCreateOrder = async () => {
     try {
       setStatus("Creating order in contract...")
@@ -106,6 +113,14 @@ export default function MintPage() {
       toast.error("Wallet not connected")
       return
     }
+    if (!nftName.trim()) {
+      toast.error("Please provide an NFT name.")
+      return
+    }
+    if (!nftDescription.trim()) {
+      toast.error("Please provide an NFT description.")
+      return
+    }
 
     setMinting(true)
     setStatus("")
@@ -113,15 +128,12 @@ export default function MintPage() {
     let signature: string
 
     try {
-      // Dummy values; normally get from form fields
-      const name = "NFT Title"
-      const description = "NFT Description"
+      const name = nftName
+      const description = nftDescription
 
-      // 1. Sign
       message = `I am signing this message to verify my ownership of this wallet and approve minting my NFT on MyProject.\nTimestamp: ${Date.now()}`
       signature = await signMessage(config, { message })
 
-      // 2. Approve tokens (ERC20.allowance is not checked here, just attempt always)
       try {
         await handleApprove()
       } catch (approveErr) {
@@ -129,7 +141,6 @@ export default function MintPage() {
         return
       }
 
-      // 3. Ensure there's an order of OrderType.MINT; if not, create one
       let hasOrder = false
       try {
         hasOrder = await hasMintOrder()
@@ -147,7 +158,6 @@ export default function MintPage() {
         setStatus("Order already present, proceeding to mint...")
       }
 
-      // 4. Prepare backend call
       const dataToSend = {
         name,
         description,
@@ -159,12 +169,13 @@ export default function MintPage() {
       formData.append("image", file)
       formData.append("data", JSON.stringify(dataToSend))
 
-      // 5. POST to backend (likely triggers contract mint from backend as owner)
       let res
       try {
         res = await api.post("/mint", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         })
+
+        console.log("Mint Details: ", res)
       } catch (apiErr: any) {
         setStatus("Backend minting failed")
         console.error("API POST error:", apiErr)
@@ -177,7 +188,20 @@ export default function MintPage() {
       }
 
       if (res?.data && res.data.success) {
-        setMinted(res.data)
+        const data = res.data
+        setMinted({
+          nftId: data.nft?.id ?? "",
+          imageHash: data.nft?.image?.ipfsCid ?? "",
+          ipfs: data.nft?.image?.ipfsCid
+            ? `ipfs://${data.nft.image.ipfsCid}`
+            : (data.ipfsUrl ?? ""),
+          timestamp: data.nft?.createdAt || data.nft?.image?.createdAt || "",
+          imageUrl: data.imageUrl ?? "",
+          tokenId: data.tokenId ?? data.nft?.tokenId ?? "",
+          metadataCid: data.nft?.image.metadataCid ?? "",
+          name: name,
+          description: description,
+        })
         toast.success("NFT Minted Successfully!")
       } else if (res?.data?.error) {
         toast.error(res.data.error || "Failed to mint NFT")
@@ -185,7 +209,6 @@ export default function MintPage() {
         toast.error("Failed to mint NFT (Unknown error)")
       }
     } catch (error: any) {
-      // This catches general logic/signature failures
       console.error("Mint error:", error)
       if (error?.response?.data?.error) {
         toast.error(error.response.data.error)
@@ -204,11 +227,33 @@ export default function MintPage() {
     }
   }, [file])
 
+  // Clipboard copy utility
+  const handleCopy = async (value: string, label?: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(value)
+      toast.success(`${label ? label + " " : ""}Copied!`)
+      setTimeout(() => {
+        setCopiedField(null)
+      }, 1200)
+    } catch (err) {
+      toast.error("Failed to copy to clipboard")
+    }
+  }
+
   const resetMint = () => {
     setMinted(null)
     setFile(null)
     setPreview(null)
     setStatus("")
+    setNftName("")
+    setNftDescription("")
+  }
+
+  // New: Clear All handler for full reset, in case you want future customizations
+  const clearAll = () => {
+    resetMint()
+    // Any other clearing logic could go here
   }
 
   return (
@@ -230,14 +275,35 @@ export default function MintPage() {
               <svg width={20} height={20} viewBox="0 0 20 20" fill="none" className="text-white/60"><rect width="20" height="20" rx="3" fill="currentColor" fillOpacity={0.24} /></svg>
               Upload & Preview
             </CardTitle>
+            {/* Add Clear All Button at top right of upload step card */}
+            {(file || preview || nftName || nftDescription) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute top-3 right-3 z-10 px-3 py-1 text-xs font-semibold text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition"
+                onClick={clearAll}
+                type="button"
+                aria-label="Clear all uploaded and form data"
+              >
+                Clear All
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
-            <UploadCard onChange={setFile} className="w-full" />
+            <UploadCard
+              onChange={setFile}
+              value={file}
+              className="w-full"
+            />
 
             {preview && (
               <div className="mt-6 flex flex-col items-center">
-                {/* Image preview could be shown here if desired */}
                 <div className="text-sm text-zinc-400">Image selected for mint</div>
+                <img
+                  src={preview}
+                  alt="NFT Preview"
+                  className="mt-2 rounded-lg object-contain max-h-40 border border-white/10 bg-black/50"
+                />
               </div>
             )}
           </CardContent>
@@ -266,10 +332,106 @@ export default function MintPage() {
             </CardContent>
           </Card>
 
-          {/* Mint status */}
+          {/* Mint Name and Description Form */}
           <Card className="bg-card/60 backdrop-blur border-2 border-white/10 rounded-2xl">
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-white/90">Mint NFT</CardTitle>
+              <CardTitle className="text-base font-semibold text-white/90">NFT Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!minted ? (
+                <form
+                  className="flex flex-col gap-4"
+                  onSubmit={e => {
+                    e.preventDefault()
+                    if (!minted) handleMint()
+                  }}
+                  autoComplete="off"
+                >
+                  <div>
+                    <label htmlFor="nft-name" className="block text-sm font-medium text-zinc-300 mb-1">NFT Name</label>
+                    <input
+                      id="nft-name"
+                      type="text"
+                      required
+                      maxLength={80}
+                      value={nftName}
+                      onChange={e => setNftName(e.target.value)}
+                      placeholder="e.g. Certificate of Authenticity"
+                      className="w-full px-3 py-2 rounded-md border border-white/10 bg-zinc-950/80 text-white shadow focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="nft-description" className="block text-sm font-medium text-zinc-300 mb-1">NFT Description</label>
+                    <textarea
+                      id="nft-description"
+                      required
+                      rows={3}
+                      maxLength={300}
+                      value={nftDescription}
+                      onChange={e => setNftDescription(e.target.value)}
+                      placeholder="e.g. Digital proof of authenticity for your collectible."
+                      className="w-full px-3 py-2 rounded-md border border-white/10 bg-zinc-950/80 text-white shadow focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                    />
+                  </div>
+                  <GradientButton
+                    type="submit"
+                    disabled={!file || !nftName.trim() || !nftDescription.trim() || minting}
+                    className="px-6 py-2 font-semibold text-lg flex justify-center items-center"
+                  >
+                    {minting ? <Loader2 className="animate-spin" /> : "Mint Authenticity NFT"}
+                  </GradientButton>
+                  {/* Add Clear All button in the form for even easier access */}
+                  {(file || nftName || nftDescription || preview) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-2 text-xs"
+                      onClick={clearAll}
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </form>
+              ) : (
+                // Only show the name and description, not the form
+                <div className="mt-2 space-y-2 text-base font-medium text-white/90 bg-black/30 rounded-lg p-4 border border-white/10 break-words w-full">
+                  <div className="flex flex-col mb-2">
+                    <span className="font-semibold text-zinc-400">NFT Name:</span>
+                    <span
+                      className="break-words text-white/95 cursor-pointer hover:bg-white/10 px-1 rounded transition"
+                      title="Click to copy NFT Name"
+                      onClick={() => minted.name && handleCopy(minted.name, "NFT Name")}
+                      style={{ userSelect: "all" }}
+                    >
+                      {minted.name}
+                      {copiedField === minted.name && (
+                        <span className="ml-2 text-primary text-xs font-semibold">Copied!</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-zinc-400">NFT Description:</span>
+                    <span
+                      className="break-words text-white/95 cursor-pointer hover:bg-white/10 px-1 rounded transition"
+                      title="Click to copy NFT Description"
+                      onClick={() => minted.description && handleCopy(minted.description, "NFT Description")}
+                      style={{ userSelect: "all" }}
+                    >
+                      {minted.description}
+                      {copiedField === minted.description && (
+                        <span className="ml-2 text-primary text-xs font-semibold">Copied!</span>
+                      )}
+                    </span>
+                  </div>
+               </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Mint Status / Result */}
+          <Card className="bg-card/60 backdrop-blur border-2 border-white/10 rounded-2xl">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-white/90">Mint Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {status && <div className="text-xs text-zinc-400 font-medium">{status}</div>}
@@ -280,7 +442,7 @@ export default function MintPage() {
               )}
               {preview && !minted && (
                 <div className="text-sm text-zinc-400">
-                  Ready to mint your authenticity NFT. 
+                  Ready to mint your authenticity NFT.
                 </div>
               )}
               <AnimatePresence>
@@ -293,22 +455,93 @@ export default function MintPage() {
                       <svg width={14} height={14} fill="none" viewBox="0 0 24 24" className="inline-block mr-1 text-white/80"><path stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                       Minted!
                     </Badge>
-                    <div className="grid gap-2 rounded border border-white/20 bg-black/30 p-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">NFT ID</span>
-                        <span className="text-white/90">{minted.id}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Image Hash</span>
-                        <span className="text-white/90">{minted.imageHash}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">IPFS</span>
-                        <span className="truncate text-white/90">{minted.ipfs}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Minted at</span>
-                        <span className="text-white/90">{minted.timestamp}</span>
+                    <div className="overflow-x-auto">
+                      <div className="grid gap-2 rounded border border-white/20 bg-black/30 p-3 text-sm min-w-[320px] max-w-full overflow-auto">
+                        <MintedRow
+                          label="NFT Name"
+                          value={minted.name}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="Description"
+                          value={minted.description}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="NFT ID"
+                          value={minted.nftId}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="Image Hash (IPFS CID)"
+                          value={minted.imageHash}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-zinc-400">Image</span>
+                          <span className="text-white/90 text-right truncate max-w-[220px] md:max-w-[300px]" title={minted.imageUrl}>
+                            {minted.imageUrl ? (
+                              <a
+                                href={minted.imageUrl.startsWith("http") ? minted.imageUrl : `https://realiabucket.s3.amazonaws.com/${minted.imageUrl}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline truncate"
+                                title={minted.imageUrl}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                {minted.imageUrl.split("/").pop()}
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                            {minted.imageUrl && (
+                              <button
+                                type="button"
+                                aria-label="Copy Image URL"
+                                className="ml-2 text-xs text-primary hover:underline"
+                                tabIndex={0}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleCopy(minted.imageUrl, "Image URL");
+                                }}
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, margin: 0 }}
+                              >Copy</button>
+                            )}
+                            {copiedField === minted.imageUrl && (
+                              <span className="ml-2 text-primary text-xs font-semibold">Copied!</span>
+                            )}
+                          </span>
+                        </div>
+                        <MintedRow
+                          label="IPFS URI"
+                          value={minted.ipfs}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="Token ID"
+                          value={minted.tokenId}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="Metadata CID"
+                          value={minted.metadataCid}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
+                        <MintedRow
+                          label="Minted at"
+                          value={minted.timestamp ? new Date(minted.timestamp).toLocaleString() : ""}
+                          copiedField={copiedField}
+                          onCopy={handleCopy}
+                        />
                       </div>
                     </div>
                   </div>
@@ -319,15 +552,7 @@ export default function MintPage() {
 
           {/* CTA Buttons */}
           <div className="flex items-center gap-3">
-            {!minted ? (
-              <GradientButton
-                disabled={!file || minting}
-                onClick={handleMint}
-                className="px-6 py-2 font-semibold text-lg"
-              >
-                {minting ? <Loader2 className="animate-spin" /> : "Mint Authenticity NFT"}
-              </GradientButton>
-            ) : (
+            {minted && (
               <Button
                 variant="secondary"
                 onClick={resetMint}
@@ -344,9 +569,58 @@ export default function MintPage() {
                 Reset
               </Button>
             )}
+            {/* Add a dedicated Clear All button for ALL uploaded & form data */}
+            {(file || preview || nftName || nftDescription) && (
+              <Button
+                variant="destructive"
+                onClick={clearAll}
+                className="px-4 py-2"
+                type="button"
+                aria-label="Clear all uploaded file and form"
+              >
+                Clear All
+              </Button>
+            )}
           </div>
         </div>
       </div>
     </main>
   )
+}
+
+// Row component to handle copy for minted detail fields
+function MintedRow({
+  label,
+  value,
+  copiedField,
+  onCopy,
+}: {
+  label: string
+  value?: string
+  copiedField: string | null
+  onCopy: (value: string, label?: string) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-zinc-400">{label}</span>
+      <span
+        className={`text-white/90 text-right truncate max-w-[220px] md:max-w-[300px] cursor-pointer hover:bg-white/10 px-1 rounded transition`}
+        title={value}
+        onClick={() => value && onCopy(value, label)}
+        style={{ userSelect: "all" }}
+        tabIndex={0}
+        onKeyDown={e => {
+          if ((e.key === "Enter" || e.key === " ") && value) {
+            e.preventDefault();
+            onCopy(value, label);
+          }
+        }}
+      >
+        {value || "-"}
+        {copiedField === value && (
+          <span className="ml-2 text-primary text-xs font-semibold">Copied!</span>
+        )}
+      </span>
+    </div>
+  );
 }
