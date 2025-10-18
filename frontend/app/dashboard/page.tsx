@@ -156,12 +156,11 @@ function shortAddress(addr: string) {
 }
 
 export default function DashboardPage() {
-  const featured = recentMints[0]
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([])
   const [pendingLoading, setPendingLoading] = useState(true)
   const [featuredNft, setFeaturedNft] = useState<any>(null)
-  const [nftLoading, setNftLoading] = useState(true) // new loader for NFT fetch
-  console.log(pendingVerifications)
+  const [nftLoading, setNftLoading] = useState(true)
+  const [nfts, setNfts] = useState<any[]>([]) // <-- Hold all fetched NFTs
   // Aggregate totals for pending verifications progress
   const pendingSummary = pendingVerifications.reduce(
     (acc, p) => {
@@ -207,16 +206,13 @@ export default function DashboardPage() {
       setPendingLoading(true)
       try {
         const res = await getPendingVerifications()
-
         if (Array.isArray(res)) {
           const results = await Promise.all(
             res.map(async (req) => {
               const progress = await getVerificationProgress(req.requestId);
-              // Use { completed, totalRequired } & progressText
               return { ...req, ...progress };
             })
           );
-
           setPendingVerifications(results)
         } else {
           setPendingVerifications([])
@@ -243,34 +239,36 @@ export default function DashboardPage() {
     const date = new Date(dateStr)
     return date.toLocaleString()
   }
+
   useEffect(() => {
     async function fetchNfts() {
       setNftLoading(true)
       try {
         const res = await api.get('/nfts')
-        // Data shape: { data: { nfts: [...] } }
-        const nfts: any[] = res.data?.nfts || []
-        // Adapt to card display structure
+        const nftsFetched: any[] = res.data?.nfts || []
+        setNfts(nftsFetched)
         setFeaturedNft(
-          nfts[0]
+          nftsFetched[0]
             ? {
-                id: nfts[0].id,
-                tokenId: nfts[0].tokenId,
-                image: nfts[0].image?.s3Key
-                  ? nfts[0].image.s3Key.startsWith("http")
-                    ? nfts[0].image.s3Key
-                    : "https://ipfs.io/ipfs/" + nfts[0].image.ipfsCid
+                id: nftsFetched[0].id,
+                tokenId: nftsFetched[0].tokenId,
+                image: nftsFetched[0].image?.s3Key
+                  ? nftsFetched[0].image.s3Key.startsWith("http")
+                    ? nftsFetched[0].image.s3Key
+                    : "https://ipfs.io/ipfs/" + nftsFetched[0].image.ipfsCid
                   : "/placeholder.svg",
-                nftId: "#" + (nfts[0].tokenId || nfts[0].id?.slice(0, 4)),
-                timestamp: formatDate(nfts[0].createdAt || nfts[0].image?.createdAt),
-                owner: shortOwner(nfts[0].userId), // Or you can use real address if available
-                name: nfts[0].name || nfts[0].image?.metadata?.name || "",
-                description: nfts[0].description || nfts[0].image?.metadata?.description || "",
+                nftId: "#" + (nftsFetched[0].tokenId || nftsFetched[0].id?.slice(0, 4)),
+                timestamp: formatDate(nftsFetched[0].createdAt || nftsFetched[0].image?.createdAt),
+                owner: shortOwner(nftsFetched[0].userId),
+                name: nftsFetched[0].name || nftsFetched[0].image?.metadata?.name || "",
+                description: nftsFetched[0].description || nftsFetched[0].image?.metadata?.description || "",
               }
             : null
         )
       } catch (error: any) {
         toast.error(error?.response?.data?.error || "Failed to fetch NFTs")
+        setNfts([])
+        setFeaturedNft(null)
       } finally {
         setNftLoading(false)
       }
@@ -320,6 +318,9 @@ export default function DashboardPage() {
     )
   }
 
+  // If there are no nfts fetched (zero state from API), show empty dashboard message for featured NFT and for recents.
+  const isNftEmpty = !nftLoading && (Array.isArray(nfts) && nfts.length === 0);
+
   return (
     <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
       <div className="mb-8">
@@ -331,9 +332,17 @@ export default function DashboardPage() {
         </p>
       </div>
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Main Featured NFT */}
+        {/* Main Featured NFT, handle 0-nft state */}
         {nftLoading ? (
           <CardSkeleton />
+        ) : isNftEmpty ? (
+          <GlassCard className="col-span-2 p-0 overflow-hidden h-full flex items-center justify-center min-h-[300px]">
+            <div className="w-full text-center flex flex-col items-center justify-center py-10">
+              
+              <div className="text-xl font-semibold text-white mb-1">No NFTs found</div>
+              <div className="text-zinc-400">There are no NFTs on the network yet. New mints will appear here!</div>
+            </div>
+          </GlassCard>
         ) : (
           <GlassCard className="col-span-2 p-0 overflow-hidden h-full">
             <div className="relative h-full">
@@ -497,6 +506,15 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          </GlassCard>
+        </div>
+      ) : isNftEmpty ? (
+        <div className="mt-8">
+          <GlassCard className="p-0 flex items-center justify-center min-h-[160px]">
+            <div className="w-full text-center flex flex-col items-center justify-center py-6">
+              <div className="text-base font-semibold text-white mb-1">No mints found</div>
+              <div className="text-zinc-400 text-sm">Once new NFTs are minted, they’ll appear here.</div>
             </div>
           </GlassCard>
         </div>
