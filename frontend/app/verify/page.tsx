@@ -104,6 +104,26 @@ export default function VerifyPage() {
     const { address } = useAccount()
     const { writeContractAsync: writeApprove } = useWriteContract()
 
+    // Helper: check if current allowance is sufficient
+    const hasSufficientAllowance = async () => {
+        if (!address) return false;
+        try {
+            const allowance = await readContract(config, {
+                address: PYUSD_ADDRESS,
+                abi: ERC20ABI,
+                functionName: "allowance",
+                args: [address, REALIA_ADDRESS],
+            });
+            // parseUnits(VERIFY_PRICE, 4) matches token decimals (4 decimals)
+            const required = parseUnits(VERIFY_PRICE, 4)
+            // Both are bigint
+            return (allowance as bigint) >= (required as bigint);
+        } catch (err) {
+            console.error("Failed to check allowance:", err)
+            return false
+        }
+    }
+
     const hasVerifyOrder = async () => {
         if (!address) return false
         try {
@@ -120,6 +140,7 @@ export default function VerifyPage() {
         }
     }
 
+    // Approve: now used only if not already allowed
     const handleApprove = async () => {
         setLoadingApprove(true)
         try {
@@ -221,6 +242,7 @@ export default function VerifyPage() {
         }
     }, [verifying, watcherActive, loadingApprove, loadingOrder, loadingApi, lastLoaderStep])
 
+    // --- MAIN verification process ---
     const verifyImage = async () => {
         if (!file) {
             toast.error("Please upload an image.")
@@ -250,17 +272,23 @@ export default function VerifyPage() {
                 setDims(d)
             }
 
+            // --- Only approve if allowance is insufficient
             setLoadingApprove(true)
-            try {
-                await handleApprove()
-            } catch (approveErr) {
-                setLoadingApprove(false)
-                const msg = "ERC20 Approve failed (user denied or contract issue)"
-                setVerificationError(msg)
-                toast.error(msg)
-                return false
-            }
+            const sufficientAllowance = await hasSufficientAllowance()
             setLoadingApprove(false)
+            if (!sufficientAllowance) {
+                setLoadingApprove(true)
+                try {
+                    await handleApprove()
+                } catch (approveErr) {
+                    setLoadingApprove(false)
+                    const msg = "ERC20 Approve failed (user denied or contract issue)"
+                    setVerificationError(msg)
+                    toast.error(msg)
+                    return false
+                }
+                setLoadingApprove(false)
+            }
 
             setLoadingOrder(true)
             let hasOrder = false
