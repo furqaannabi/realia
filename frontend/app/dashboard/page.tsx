@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { Loader2, CheckCircle2, TimerIcon, ExternalLink } from "lucide-react"
 import RecentMints from "@/components/RecentMints"
 import { useEffect, useState } from "react"
-import { getPendingVerifications } from "../utils/web3/blockscout"
+import { getPendingVerifications, getVerificationProgress } from "../utils/web3/blockscout"
 import { api } from "../utils/axiosInstance"
 import { toast } from "sonner"
 
@@ -101,7 +101,7 @@ const BLOCKSCOUT_BASE_URL = "https://arbitrum-sepolia.blockscout.com"
 const baseStats = [
   { label: "Authentic Images", value: "12,438", delta: "+3.1% this week" },
   { label: "Verification Requests", value: "3,209", delta: "+1.8% this week" },
-  { label: "Verifier Nodes", value: "72", delta: "stable" },
+  { label: "Verifier Agents", value: "72", delta: "stable" },
 ]
 
 const recentMints = [
@@ -161,27 +161,66 @@ export default function DashboardPage() {
   const [pendingLoading, setPendingLoading] = useState(true)
   const [featuredNft, setFeaturedNft] = useState<any>(null)
   const [nftLoading, setNftLoading] = useState(true) // new loader for NFT fetch
+  console.log(pendingVerifications)
+  // Aggregate totals for pending verifications progress
+  const pendingSummary = pendingVerifications.reduce(
+    (acc, p) => {
+      if (typeof p.completed === "number" && typeof p.totalRequired === "number") {
+        acc.completed += p.completed;
+        acc.totalRequired += p.totalRequired;
+      }
+      return acc;
+    },
+    { completed: 0, totalRequired: 0 }
+  );
 
-  // Used to update stats with real pending count.
+  // Used to update stats with real pending count and completed progress.
   const stats = [
     ...baseStats,
     {
       label: "Pending Verifications",
       value: pendingLoading
         ? <Loader2 className="h-4 w-4 animate-spin inline text-yellow-400" />
-        : pendingVerifications.length.toLocaleString(),
+        : (
+            <span className="flex items-center gap-2">
+              <span className="font-semibold text-yellow-300 text-lg">
+                {pendingVerifications.length.toLocaleString()}
+              </span>
+              {pendingSummary.totalRequired > 0 && (
+                <span className="text-xs bg-yellow-900/30 text-yellow-200 font-mono px-2 py-0.5 rounded ml-1 flex items-center gap-1 border border-yellow-800/30">
+                  <span className="font-bold">{pendingSummary.completed}</span>
+                  <span className="opacity-50">/</span>
+                  <span className="font-bold">{pendingSummary.totalRequired}</span>
+                  <span className="ml-1 text-yellow-300 not-italic font-normal">✓</span>
+                </span>
+              )}
+            </span>
+          ),
       delta: pendingLoading
         ? ""
         : (pendingVerifications.length > 0 ? "+On-chain" : "No pendings"),
     },
-  ]
+  ];
 
   useEffect(() => {
     const getVerificationPending = async () => {
       setPendingLoading(true)
       try {
         const res = await getPendingVerifications()
-        setPendingVerifications(Array.isArray(res) ? res : [])
+
+        if (Array.isArray(res)) {
+          const results = await Promise.all(
+            res.map(async (req) => {
+              const progress = await getVerificationProgress(req.requestId);
+              // Use { completed, totalRequired } & progressText
+              return { ...req, ...progress };
+            })
+          );
+
+          setPendingVerifications(results)
+        } else {
+          setPendingVerifications([])
+        }
       } finally {
         setPendingLoading(false)
       }
@@ -205,32 +244,29 @@ export default function DashboardPage() {
     return date.toLocaleString()
   }
   useEffect(() => {
-
     async function fetchNfts() {
       setNftLoading(true)
       try {
         const res = await api.get('/nfts')
-
         // Data shape: { data: { nfts: [...] } }
         const nfts: any[] = res.data?.nfts || []
-
         // Adapt to card display structure
         setFeaturedNft(
           nfts[0]
             ? {
-              id: nfts[0].id,
-              tokenId: nfts[0].tokenId,
-              image: nfts[0].image?.s3Key
-                ? nfts[0].image.s3Key.startsWith("http")
-                  ? nfts[0].image.s3Key
-                  : "https://ipfs.io/ipfs/" + nfts[0].image.ipfsCid
-                : "/placeholder.svg",
-              nftId: "#" + (nfts[0].tokenId || nfts[0].id?.slice(0, 4)),
-              timestamp: formatDate(nfts[0].createdAt || nfts[0].image?.createdAt),
-              owner: shortOwner(nfts[0].userId), // Or you can use real address if available
-              name: nfts[0].name || nfts[0].image?.metadata?.name || "",
-              description: nfts[0].description || nfts[0].image?.metadata?.description || "",
-            }
+                id: nfts[0].id,
+                tokenId: nfts[0].tokenId,
+                image: nfts[0].image?.s3Key
+                  ? nfts[0].image.s3Key.startsWith("http")
+                    ? nfts[0].image.s3Key
+                    : "https://ipfs.io/ipfs/" + nfts[0].image.ipfsCid
+                  : "/placeholder.svg",
+                nftId: "#" + (nfts[0].tokenId || nfts[0].id?.slice(0, 4)),
+                timestamp: formatDate(nfts[0].createdAt || nfts[0].image?.createdAt),
+                owner: shortOwner(nfts[0].userId), // Or you can use real address if available
+                name: nfts[0].name || nfts[0].image?.metadata?.name || "",
+                description: nfts[0].description || nfts[0].image?.metadata?.description || "",
+              }
             : null
         )
       } catch (error: any) {
@@ -241,6 +277,48 @@ export default function DashboardPage() {
     }
     fetchNfts()
   }, [])
+
+  function renderVerificationProgress(p: any) {
+    const completed = typeof p.completed === "number" ? p.completed : 0
+    const total = typeof p.totalRequired === "number" ? p.totalRequired : 0
+    const percent =
+      total > 0 ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : 0
+
+    return (
+      <div className="flex items-center gap-2 mt-1 text-xs w-full">
+        <span className="text-zinc-400">Progress:</span>
+        <span className="relative w-24 h-3 flex items-center mr-1">
+          <span
+            className="absolute left-0 top-0 h-full rounded-full"
+            style={{
+              width: `${percent}%`,
+              background:
+                percent === 100
+                  ? "linear-gradient(90deg,#22c55e,#bde1b6)"
+                  : "linear-gradient(90deg,#fbbf24,#fde68a)",
+              transition: "width 0.4s cubic-bezier(0.22,0.51,0.36,1)"
+            }}
+          />
+          <span
+            className="relative flex-1 block h-full bg-zinc-800/60 rounded-full border border-zinc-700/60"
+          />
+        </span>
+        <span
+          className={
+            "font-mono px-1 rounded " +
+            (percent === 100
+              ? "bg-green-600/20 text-green-300 font-bold"
+              : "bg-yellow-700/40 text-yellow-200 font-semibold")
+          }
+        >
+          {completed}
+          <span className="opacity-60">/</span>
+          {total}
+        </span>
+        <span className="ml-1 text-[11px] text-zinc-400">{percent}%</span>
+      </div>
+    )
+  }
 
   return (
     <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
@@ -344,7 +422,8 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     pendingVerifications
-                      .slice(0, 3)
+                      .slice(-3).reverse()
+
                       .map((p, i) => (
                         <div
                           key={p.txHash}
@@ -367,6 +446,8 @@ export default function DashboardPage() {
                               <span className="mx-2 text-zinc-500">|</span>
                               <span className="font-medium text-zinc-200">Block:</span> {p.blockNumber}
                             </div>
+                            {/* Highlighted Progress Bar */}
+                            {renderVerificationProgress(p)}
                             <div className="flex items-center gap-2 mt-1 text-xs">
                               <span className="text-zinc-400">TX:</span>
                               <a
