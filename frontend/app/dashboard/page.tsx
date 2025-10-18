@@ -182,52 +182,54 @@ export default function DashboardPage() {
                     No pending verifications at the moment!
                   </div>
                 ) : (
-                  pendingVerifications.map((p, i) => (
-                    <div
-                      key={p.txHash}
-                      className="flex items-start gap-4 bg-white/5 rounded-lg px-3 py-2 border border-white/10 shadow hover:shadow-lg transition-all group"
-                    >
-                      <div className="mt-1">
-                        <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
+                  pendingVerifications
+                    .slice(0, 3)
+                    .map((p, i) => (
+                      <div
+                        key={p.txHash}
+                        className="flex items-start gap-4 bg-white/5 rounded-lg px-3 py-2 border border-white/10 shadow hover:shadow-lg transition-all group"
+                      >
+                        <div className="mt-1">
+                          <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-block rounded px-2 py-0.5 text-xs font-medium bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 shadow">
+                              Pending Verification
+                            </span>
+                            <span className="hidden sm:inline text-xs text-zinc-400">
+                              (Request ID: <span className="font-semibold text-zinc-200">{p.requestId}</span>)
+                            </span>
+                          </div>
+                          <div className="text-xs text-zinc-300 truncate">
+                            <span className="font-medium text-zinc-200">User:</span> {shortAddress(p.user)}
+                            <span className="mx-2 text-zinc-500">|</span>
+                            <span className="font-medium text-zinc-200">Block:</span> {p.blockNumber}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-xs">
+                            <span className="text-zinc-400">TX:</span>
+                            <a
+                              href={`${BLOCKSCOUT_BASE_URL}/tx/${p.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-brand hover:underline font-mono bg-brand/10 rounded px-1"
+                            >
+                              {p.txHash.slice(0, 8) + "..." + p.txHash.slice(-6)}
+                            </a>
+                            <a
+                              href={`${BLOCKSCOUT_BASE_URL}/tx/${p.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-1 text-xs text-zinc-500 hover:text-brand/90 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition"
+                              title="View on Blockscout"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span className="sr-only">View on Blockscout</span>
+                            </a>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-block rounded px-2 py-0.5 text-xs font-medium bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 shadow">
-                            Pending Verification
-                          </span>
-                          <span className="hidden sm:inline text-xs text-zinc-400">
-                            (Request ID: <span className="font-semibold text-zinc-200">{p.requestId}</span>)
-                          </span>
-                        </div>
-                        <div className="text-xs text-zinc-300 truncate">
-                          <span className="font-medium text-zinc-200">User:</span> {shortAddress(p.user)}
-                          <span className="mx-2 text-zinc-500">|</span>
-                          <span className="font-medium text-zinc-200">Block:</span> {p.blockNumber}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1 text-xs">
-                          <span className="text-zinc-400">TX:</span>
-                          <a
-                            href={`${BLOCKSCOUT_BASE_URL}/tx/${p.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-brand hover:underline font-mono bg-brand/10 rounded px-1"
-                          >
-                            {p.txHash.slice(0, 8) + "..." + p.txHash.slice(-6)}
-                          </a>
-                          <a
-                            href={`${BLOCKSCOUT_BASE_URL}/tx/${p.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-1 text-xs text-zinc-500 hover:text-brand/90 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition"
-                            title="View on Blockscout"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span className="sr-only">View on Blockscout</span>
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                    ))
                 )}
               </AnimatePresence>
             </div>
