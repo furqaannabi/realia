@@ -169,7 +169,7 @@ async def check_and_register_agent(ctx: Context):
                     'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
                 })
                 signed_update = agent_account.sign_transaction(update_tx)
-                update_hash = w3.eth.send_raw_transaction(signed_update.rawTransaction)
+                update_hash = w3.eth.send_raw_transaction(signed_update.raw_transaction)
                 update_receipt = w3.eth.wait_for_transaction_receipt(update_hash)
                 
                 if update_receipt['status'] != 1:
@@ -206,7 +206,7 @@ async def check_and_register_agent(ctx: Context):
             'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
         })
         signed_approve = agent_account.sign_transaction(approve_tx)
-        approve_hash = w3.eth.send_raw_transaction(signed_approve.rawTransaction)
+        approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
         approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash)
         
         if approve_receipt['status'] != 1:
@@ -226,7 +226,7 @@ async def check_and_register_agent(ctx: Context):
         ctx.logger.info(f"Transaction details: gas={register_tx.get('gas')}, gasPrice={register_tx.get('gasPrice')}")
         
         signed_register = agent_account.sign_transaction(register_tx)
-        register_hash = w3.eth.send_raw_transaction(signed_register.rawTransaction)
+        register_hash = w3.eth.send_raw_transaction(signed_register.raw_transaction)
         ctx.logger.info(f"Transaction sent: {register_hash.hex()}")
         ctx.logger.info("Waiting for confirmation...")
         
@@ -339,7 +339,7 @@ async def sync_verification_requests(ctx: Context):
                             })
                             
                             signed_response = agent_account.sign_transaction(response_tx)
-                            response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
+                            response_hash = w3.eth.send_raw_transaction(signed_response.raw_transaction)
                             ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
                             
                             response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
@@ -419,3 +419,5 @@ async def start(ctx: Context):
     ctx.logger.info("✓ Started NFT embedding sync task (every 30s)")
     
     ctx.logger.info("🚀 All services running!")
+
+agent.run()
