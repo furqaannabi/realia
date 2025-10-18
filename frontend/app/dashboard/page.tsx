@@ -9,6 +9,8 @@ import { Loader2, CheckCircle2, TimerIcon, ExternalLink } from "lucide-react"
 import RecentMints from "@/components/RecentMints"
 import { useEffect, useState } from "react"
 import { getPendingVerifications } from "../utils/web3/blockscout"
+import { api } from "../utils/axiosInstance"
+import { toast } from "sonner"
 
 const BLOCKSCOUT_BASE_URL = "https://arbitrum-sepolia.blockscout.com"
 
@@ -74,7 +76,7 @@ export default function DashboardPage() {
   const featured = recentMints[0]
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([])
   const [pendingLoading, setPendingLoading] = useState(true)
-
+  const [featuredNft, setFeaturedNft] = useState<any>(null)
   // Used to update stats with real pending count.
   const stats = [
     ...baseStats,
@@ -102,6 +104,55 @@ export default function DashboardPage() {
     getVerificationPending()
   }, [])
 
+  // Helper to format owner (userId or address)
+  function shortOwner(userIdOrAddr: string) {
+    if (!userIdOrAddr) return "Unknown";
+    if (userIdOrAddr.startsWith("0x")) {
+      return userIdOrAddr.slice(0, 6) + "..." + userIdOrAddr.slice(-4);
+    }
+    return userIdOrAddr.slice(0, 4) + "..." + userIdOrAddr.slice(-4);
+  }
+
+  // Helper to format ISO string to readable
+  function formatDate(dateStr: string) {
+    if (!dateStr) return ""
+    const date = new Date(dateStr)
+    return date.toLocaleString()
+  }
+  useEffect(() => {
+
+    async function fetchNfts() {
+      try {
+        const res = await api.get('/nfts')
+
+        // Data shape: { data: { nfts: [...] } }
+        const nfts: any[] = res.data?.nfts || []
+
+        // Adapt to card display structure
+        setFeaturedNft(
+          nfts[0]
+            ? {
+              id: nfts[0].id,
+              tokenId: nfts[0].tokenId,
+              image: nfts[0].image?.s3Key
+                ? nfts[0].image.s3Key.startsWith("http")
+                  ? nfts[0].image.s3Key
+                  : "https://ipfs.io/ipfs/" + nfts[0].image.ipfsCid
+                : "/placeholder.svg",
+              nftId: "#" + (nfts[0].tokenId || nfts[0].id?.slice(0, 4)),
+              timestamp: formatDate(nfts[0].createdAt || nfts[0].image?.createdAt),
+              owner: shortOwner(nfts[0].userId), // Or you can use real address if available
+              name: nfts[0].name || nfts[0].image?.metadata?.name || "",
+              description: nfts[0].description || nfts[0].image?.metadata?.description || "",
+            }
+            : null
+        )
+      } catch (error: any) {
+        toast.error(error?.response?.data?.error || "Failed to fetch NFTs")
+      }
+    }
+    fetchNfts()
+  }, [])
   return (
     <main className="min-h-[90vh] p-4 pb-8 md:p-12 bg-gradient-to-br from-background via-zinc-900 to-black">
       <div className="mb-8">
@@ -114,26 +165,36 @@ export default function DashboardPage() {
       </div>
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Main Featured NFT */}
-        <GlassCard className="col-span-2 p-0 overflow-hidden">
-          <div className="relative">
-            <AspectRatio ratio={16 / 9}>
+        <GlassCard className="col-span-2 p-0 overflow-hidden h-full">
+          <div className="relative h-full">
+            <AspectRatio ratio={16 / 9} className="h-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={featured.image || "/placeholder.svg"}
-                alt={`Featured NFT ${featured.nftId}`}
-                className="absolute inset-0 h-full w-full object-cover"
+                src={featuredNft?.image || "/placeholder.svg"}
+                alt={`Featured NFT ${featuredNft?.nftId || ""}`}
+                className="absolute inset-0 w-full h-full min-h-full object-cover object-[00%_10%]"
+                style={{ height: "120%", width: "100%" }}
               />
             </AspectRatio>
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 px-4 py-5 md:px-7 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-zinc-900/60 via-zinc-900/5 to-transparent rounded-b-xl">
               <div className="space-y-1">
                 <div className="text-xs text-white/70">Featured Mint</div>
-                <div className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">{featured.nftId}</div>
+                <div className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">{featuredNft?.nftId}</div>
                 <div className="text-xs text-white/80">
-                  Owner {featured.owner} • Minted {featured.timestamp}
+                  Owner {featuredNft?.owner} • Minted {featuredNft?.timestamp}
                 </div>
+                {featuredNft?.description && (
+                  <div className="text-xs text-zinc-300 line-clamp-2 mt-1">
+                    {featuredNft.description}
+                  </div>
+                )}
               </div>
-              <Badge variant="default" className="bg-brand/90 text-white font-semibold shadow-lg">{featured.status}</Badge>
+              {featuredNft?.name && (
+                <Badge variant="default" className="bg-brand/90 text-white font-semibold shadow-lg">
+                  {featuredNft.name}
+                </Badge>
+              )}
             </div>
           </div>
         </GlassCard>
