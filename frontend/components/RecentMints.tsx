@@ -5,6 +5,7 @@ import { GlassCard } from './card'
 import { AspectRatio } from './ui/aspect-ratio'
 import { api } from '@/app/utils/axiosInstance'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 
 // Helper to format owner (userId or address)
@@ -31,8 +32,10 @@ function RecentMints({ recentMints: initialRecentMints }: { recentMints?: any[] 
         async function fetchNfts() {
             try {
                 const res = await api.get('/nfts')
+                console.log(res)
                 // Data shape: { data: { nfts: [...] } }
                 const nfts: any[] = res.data?.nfts || []
+
                 // Adapt to card display structure
                 setRecentMints(
                     nfts.map(nft => ({
@@ -71,35 +74,37 @@ function RecentMints({ recentMints: initialRecentMints }: { recentMints?: any[] 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {recentMints.map((item: any) => (
                     <div key={item.nftId || item.tokenId}>
-                        <GlassCard className="p-0 overflow-hidden border-2 border-white/10 bg-gradient-to-br from-black/85 via-zinc-900/60 to-black/80">
-                            <div className="relative">
-                                <AspectRatio ratio={4 / 3}>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={item.image || "/placeholder.svg"}
-                                        alt={`NFT ${item.nftId || item.tokenId}`}
-                                        className="absolute inset-0 h-full w-full object-cover bg-zinc-900"
-                                    />
-                                </AspectRatio>
-                                {/* Removed the "Verified" badge */}
-                            </div>
-                            <div className="p-3 flex flex-col gap-1">
-                                <div className="flex items-center justify-between">
-                                    <div className="font-medium text-white/90">{item.nftId || item.tokenId}</div>
-                                    <div className="text-xs text-zinc-400">{item.timestamp}</div>
+                        <Link href={`/nft/${item.tokenId}`}>
+                            <GlassCard className="p-0 overflow-hidden border-2 border-white/10 bg-gradient-to-br from-black/85 via-zinc-900/60 to-black/80">
+                                <div className="relative">
+                                    <AspectRatio ratio={4 / 3}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={item.image || "/placeholder.svg"}
+                                            alt={`NFT ${item.nftId || item.tokenId}`}
+                                            className="absolute inset-0 h-full w-full object-cover bg-zinc-900"
+                                        />
+                                    </AspectRatio>
+                                    {/* Removed the "Verified" badge */}
                                 </div>
-                                {/* Show name and description */}
-                                {item.name && (
-                                    <div className="text-sm font-semibold text-white/80 truncate">{item.name}</div>
-                                )}
-                                {item.description && (
-                                    <div className="text-xs text-zinc-300/80 truncate">{item.description}</div>
-                                )}
-                                <div className="text-xs text-zinc-400 mt-1">
-                                    Owner {item.owner}
+                                <div className="p-3 flex flex-col gap-1">
+                                    <div className="flex items-center justify-between">
+                                        <div className="font-medium text-white/90">{item.nftId || item.tokenId}</div>
+                                        <div className="text-xs text-zinc-400">{item.timestamp}</div>
+                                    </div>
+                                    {/* Show name and description */}
+                                    {item.name && (
+                                        <div className="text-sm font-semibold text-white/80 truncate">{item.name}</div>
+                                    )}
+                                    {item.description && (
+                                        <div className="text-xs text-zinc-300/80 truncate">{item.description}</div>
+                                    )}
+                                    <div className="text-xs text-zinc-400 mt-1">
+                                        Owner {item.owner}
+                                    </div>
                                 </div>
-                            </div>
-                        </GlassCard>
+                            </GlassCard>
+                        </Link>
                     </div>
                 ))}
             </div>
