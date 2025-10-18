@@ -203,6 +203,14 @@ contract RealiaFactory is Ownable {
     require(agents[msg.sender].isStaked, "Agent is not staked");
     require(verificationRequests[requestId].processed == false, "Request is already processed");
     require(result != VerificationResult.NONE, "Invalid verification result");
+    require(verificationRequests[requestId].user != address(0), "Verification request does not exist");
+    
+    // Check if agent has already responded to this request
+    VerificationResponse[] memory existingResponses = verificationResponses[requestId];
+    for (uint256 i = 0; i < existingResponses.length; i++) {
+      require(existingResponses[i].agent != msg.sender, "Agent has already responded to this request");
+    }
+    
     verificationResponses[requestId].push(VerificationResponse(msg.sender, result, propertyTokenId, block.timestamp));
     emit VerificationResponseByAgent(msg.sender, requestId, result == VerificationResult.VERIFIED);
     if (verificationResponses[requestId].length >= REQUIRED_VERIFICATIONS) {
@@ -312,6 +320,67 @@ contract RealiaFactory is Ownable {
     }
     
     return (totalCount, nftIds, nftUris);
+  }
+
+  /**
+   * @dev Sync function for agents to get all pending verification requests
+   * @return pendingCount The total number of pending verification requests
+   * @return requestIds Array of pending verification request IDs
+   * @return users Array of users who requested verification
+   * @return uris Array of URIs to verify
+   * @return responseCounts Array of response counts for each request
+   */
+  function syncPendingVerifications() external view returns (
+    uint256 pendingCount,
+    uint256[] memory requestIds,
+    address[] memory users,
+    string[] memory uris,
+    uint256[] memory responseCounts
+  ) {
+    // First pass: count pending verifications
+    uint256 totalPending = 0;
+    for (uint256 i = 1; i <= verificationId; i++) {
+      if (!verificationRequests[i].processed && verificationRequests[i].user != address(0)) {
+        totalPending++;
+      }
+    }
+    
+    // Initialize arrays
+    pendingCount = totalPending;
+    requestIds = new uint256[](totalPending);
+    users = new address[](totalPending);
+    uris = new string[](totalPending);
+    responseCounts = new uint256[](totalPending);
+    
+    // Second pass: populate arrays
+    uint256 index = 0;
+    for (uint256 i = 1; i <= verificationId; i++) {
+      if (!verificationRequests[i].processed && verificationRequests[i].user != address(0)) {
+        requestIds[index] = i;
+        users[index] = verificationRequests[i].user;
+        uris[index] = verificationRequests[i].uri;
+        responseCounts[index] = verificationResponses[i].length;
+        index++;
+      }
+    }
+    
+    return (pendingCount, requestIds, users, uris, responseCounts);
+  }
+
+  /**
+   * @dev Check if a specific agent has already responded to a verification request
+   * @param requestId The verification request ID
+   * @param agent The agent address to check
+   * @return hasResponded True if the agent has already responded, false otherwise
+   */
+  function hasAgentResponded(uint256 requestId, address agent) external view returns (bool hasResponded) {
+    VerificationResponse[] memory responses = verificationResponses[requestId];
+    for (uint256 i = 0; i < responses.length; i++) {
+      if (responses[i].agent == agent) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function setRealiaNFT(address _realiaNFT) external onlyOwner {

@@ -34,8 +34,11 @@ REALIA_FACTORY_ABI = [
     {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "registerAgent", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "updateAgentAddress", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "name": "verificationRequests", "outputs": [{"internalType": "address", "name": "user", "type": "address"}, {"internalType": "string", "name": "uri", "type": "string"}, {"internalType": "bool", "name": "processed", "type": "bool"}, {"internalType": "uint256", "name": "requestTime", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}, {"internalType": "uint256", "name": "", "type": "uint256"}], "name": "verificationResponses", "outputs": [{"internalType": "address", "name": "agent", "type": "address"}, {"internalType": "enum VerificationResult", "name": "result", "type": "uint8"}, {"internalType": "uint256", "name": "tokenId", "type": "uint256"}, {"internalType": "uint256", "name": "responseTime", "type": "uint256"}], "stateMutability": "view", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}, {"internalType": "enum VerificationResult", "name": "result", "type": "uint8"}, {"internalType": "uint256", "name": "propertyTokenId", "type": "uint256"}], "name": "responseVerification", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
-    {"inputs": [], "name": "syncAgent", "outputs": [{"internalType": "uint256", "name": "totalCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "nftIds", "type": "uint256[]"}, {"internalType": "string[]", "name": "nftUris", "type": "string[]"}], "stateMutability": "view", "type": "function"}
+    {"inputs": [], "name": "syncAgent", "outputs": [{"internalType": "uint256", "name": "totalCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "nftIds", "type": "uint256[]"}, {"internalType": "string[]", "name": "nftUris", "type": "string[]"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "syncPendingVerifications", "outputs": [{"internalType": "uint256", "name": "pendingCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "requestIds", "type": "uint256[]"}, {"internalType": "address[]", "name": "users", "type": "address[]"}, {"internalType": "string[]", "name": "uris", "type": "string[]"}, {"internalType": "uint256[]", "name": "responseCounts", "type": "uint256[]"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}, {"internalType": "address", "name": "agent", "type": "address"}], "name": "hasAgentResponded", "outputs": [{"internalType": "bool", "name": "hasResponded", "type": "bool"}], "stateMutability": "view", "type": "function"}
 ]
 
 # RealiaNFT ABI - contains only the functions/events used by the agent
@@ -246,46 +249,47 @@ async def check_and_register_agent(ctx: Context):
         ctx.logger.error(f"Failed to check/register agent: {e}")
         raise e
 
-async def listen_for_verification_events(ctx: Context):
-    """Listen for verification request events from the blockchain"""
-    event_filter = factory_contract.events.VerificationRequested.create_filter(from_block="latest")
+async def poll_for_verification_requests(ctx: Context):
+    """Poll for pending verification requests every 5 seconds using syncPendingVerifications"""
+    processed_requests = set()  # Track which requests we've already processed locally
+    
     while True:
-        for event in event_filter.get_new_entries():
-            data = event["args"]
-            request_id = data["requestId"]
-            user_address = data["user"]
-            ctx.logger.info(f"🔍 New verification request! ID: {request_id}, User: {user_address}")
+        try:
+            # Call syncPendingVerifications to get all pending verifications
+            pending_count, request_ids, users, uris, response_counts = factory_contract.functions.syncPendingVerifications().call()
             
-            # Handle verification asynchronously
-            asyncio.create_task(handle_verification(ctx, request_id))
-        
-        await asyncio.sleep(5)
-
-async def listen_for_mint_events(ctx: Context):
-    """Listen for new NFT mint events and create embeddings immediately"""
-    event_filter = nft_contract.events.Minted.create_filter(from_block="latest")
-    while True:
-        for event in event_filter.get_new_entries():
-            data = event["args"]
-            token_id = data["tokenId"]
-            to_address = data["to"]
-            ctx.logger.info(f"🎉 New NFT minted! Token ID: {token_id}, Owner: {to_address}")
-            
-            try:
-                # Get the token URI from the contract
-                token_uri = nft_contract.functions.tokenURI(token_id).call()
-                ctx.logger.info(f"Fetching URI for NFT #{token_id}: {token_uri}")
+            if pending_count > 0:
+                ctx.logger.info(f"Syncing {pending_count} pending verification request(s) from contract")
                 
-                # Create embedding if it doesn't exist
-                if not point_exists(token_id):
-                    ctx.logger.info(f"Creating embedding for newly minted NFT #{token_id}")
-                    embedding = get_embeddings(token_uri)
-                    create_point(token_id, embedding, {"tokenId": token_id, "uri": token_uri, "owner": to_address})
-                    ctx.logger.info(f"✓ Embedding created for NFT #{token_id}")
-                else:
-                    ctx.logger.info(f"Embedding already exists for NFT #{token_id}")
-            except Exception as e:
-                ctx.logger.error(f"Failed to process minted NFT #{token_id}: {e}")
+                new_pending = 0
+                for i in range(pending_count):
+                    request_id = request_ids[i]
+                    user = users[i]
+                    uri = uris[i]
+                    response_count = response_counts[i]
+                    
+                    # Check if we've already processed this request locally
+                    if request_id in processed_requests:
+                        continue
+                    
+                    # Check if this agent has already responded on-chain
+                    has_responded = factory_contract.functions.hasAgentResponded(request_id, AGENT_EVM_ADDRESS).call()
+                    
+                    if not has_responded:
+                        ctx.logger.info(f"🔍 Found pending verification request! ID: {request_id}, User: {user}, Responses: {response_count}/5")
+                        new_pending += 1
+                        
+                        # Mark as being processed locally
+                        processed_requests.add(request_id)
+                        
+                        # Handle verification asynchronously
+                        asyncio.create_task(handle_verification(ctx, request_id))
+                
+                if new_pending > 0:
+                    ctx.logger.info(f"Processing {new_pending} new verification request(s)")
+                    
+        except Exception as e:
+            ctx.logger.error(f"Error polling for verification requests: {e}")
         
         await asyncio.sleep(5)
 
@@ -340,17 +344,13 @@ async def start(ctx: Context):
     qdrant_result = ensure_qdrant_collection()
     ctx.logger.info(f"QDRANT collection: {qdrant_result}")
     
-    # Start verification event listener
-    asyncio.create_task(listen_for_verification_events(ctx))
-    ctx.logger.info("✓ Started verification event listener")
-    
-    # Start mint event listener
-    asyncio.create_task(listen_for_mint_events(ctx))
-    ctx.logger.info("✓ Started mint event listener")
+    # Start verification request polling
+    asyncio.create_task(poll_for_verification_requests(ctx))
+    ctx.logger.info("✓ Started verification request polling (every 5s)")
     
     # Start NFT sync task
     asyncio.create_task(sync_nft_embeddings(ctx))
-    ctx.logger.info("✓ Started NFT embedding sync task")
+    ctx.logger.info("✓ Started NFT embedding sync task (every 30s)")
     
     ctx.logger.info("🚀 All services running!")
 
@@ -361,6 +361,8 @@ async def handle_verification(ctx: Context, request_id: int):
     2. Getting embedding for the verification image
     3. Searching Qdrant for similar NFTs
     4. Submitting verification response to blockchain
+    
+    Note: Agent response validation is handled at contract level
     """
     try:
         ctx.logger.info(f"Processing verification request #{request_id}")
