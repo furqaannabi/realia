@@ -249,12 +249,12 @@ async def check_and_register_agent(ctx: Context):
         ctx.logger.error(f"Failed to check/register agent: {e}")
         raise e
 
+@agent.on_interval(period=5)
 async def sync_verification_requests(ctx: Context):
     """Poll for pending verification requests every 5 seconds using syncPendingVerifications"""
     processed_requests = set()  # Track which requests we've already processed locally
     
-    while True:
-        try:
+    try:
             # Call syncPendingVerifications to get all pending verifications
             pending_count, request_ids, users, uris, response_counts = factory_contract.functions.syncPendingVerifications().call()
             
@@ -354,41 +354,36 @@ async def sync_verification_requests(ctx: Context):
                 if new_pending > 0:
                     ctx.logger.info(f"Processing {new_pending} new verification request(s)")
                     
-        except Exception as e:
-            ctx.logger.error(f"Error polling for verification requests: {e}")
-        
-        await asyncio.sleep(5)
+    except Exception as e:
+        ctx.logger.error(f"Error polling for verification requests: {e}")
 
+@agent.on_interval(period=5)
 async def sync_nft_embeddings(ctx: Context):
     """Sync NFT embeddings from blockchain to Qdrant"""
-    while True:
-        try:
-            # Call syncAgent function from smart contract (RealiaFactory)
-            total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
-            ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
-            
-            # Check each NFT and create embedding if missing
-            for i in range(len(nft_ids)):
-                nft_id = nft_ids[i]
-                nft_uri = nft_uris[i]
-                
-                if not point_exists(nft_id):
-                    ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
-                    try:
-                        embedding = get_embeddings(nft_uri)
-                        create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
-                        ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
-                    except Exception as e:
-                        ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
-                else:
-                    ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
-            
-            ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
-        except Exception as e:
-            ctx.logger.error(f"Sync error: {e}")
+    try:
+        # Call syncAgent function from smart contract (RealiaFactory)
+        total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
+        ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
         
-        # Wait 30 seconds before next sync
-        await asyncio.sleep(30)
+        # Check each NFT and create embedding if missing
+        for i in range(len(nft_ids)):
+            nft_id = nft_ids[i]
+            nft_uri = nft_uris[i]
+            
+            if not point_exists(nft_id):
+                ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
+                try:
+                    embedding = get_embeddings(nft_uri)
+                    create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
+                    ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
+                except Exception as e:
+                    ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
+            else:
+                ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
+        
+        ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
+    except Exception as e:
+        ctx.logger.error(f"Sync error: {e}")
 
 @agent.on_event("startup")
 async def start(ctx: Context):
@@ -409,13 +404,5 @@ async def start(ctx: Context):
     # Initialize Qdrant collection
     qdrant_result = ensure_qdrant_collection()
     ctx.logger.info(f"QDRANT collection: {qdrant_result}")
-    
-    # Start verification request polling
-    asyncio.create_task(sync_verification_requests(ctx))
-    ctx.logger.info("✓ Started verification request polling (every 5s)")
-    
-    # Start NFT sync task
-    asyncio.create_task(sync_nft_embeddings(ctx))
-    ctx.logger.info("✓ Started NFT embedding sync task (every 30s)")
     
     ctx.logger.info("🚀 All services running!")

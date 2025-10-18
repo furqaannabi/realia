@@ -249,146 +249,141 @@ async def check_and_register_agent(ctx: Context):
         ctx.logger.error(f"Failed to check/register agent: {e}")
         raise e
 
+@agent.on_interval(period=5)
 async def sync_verification_requests(ctx: Context):
     """Poll for pending verification requests every 5 seconds using syncPendingVerifications"""
     processed_requests = set()  # Track which requests we've already processed locally
     
-    while True:
-        try:
-            # Call syncPendingVerifications to get all pending verifications
-            pending_count, request_ids, users, uris, response_counts = factory_contract.functions.syncPendingVerifications().call()
+    try:
+        # Call syncPendingVerifications to get all pending verifications
+        pending_count, request_ids, users, uris, response_counts = factory_contract.functions.syncPendingVerifications().call()
+        
+        if pending_count > 0:
+            ctx.logger.info(f"Syncing pending verification request(s) from contract")
             
-            if pending_count > 0:
-                ctx.logger.info(f"Syncing pending verification request(s) from contract")
+            new_pending = 0
+            for i in range(pending_count):
+                request_id = request_ids[i]
+                user = users[i]
+                uri = uris[i]
+                response_count = response_counts[i]
                 
-                new_pending = 0
-                for i in range(pending_count):
-                    request_id = request_ids[i]
-                    user = users[i]
-                    uri = uris[i]
-                    response_count = response_counts[i]
+                # Check if we've already processed this request locally
+                if request_id in processed_requests:
+                    continue
+                
+                # Check if this agent has already responded on-chain
+                has_responded = factory_contract.functions.hasAgentResponded(request_id, AGENT_EVM_ADDRESS).call()
+                
+                if not has_responded:
+                    ctx.logger.info(f"🔍 Found pending verification request! ID: {request_id}, User: {user}, Responses: {response_count}/5")
+                    new_pending += 1
                     
-                    # Check if we've already processed this request locally
-                    if request_id in processed_requests:
-                        continue
+                    # Mark as being processed locally
+                    processed_requests.add(request_id)
                     
-                    # Check if this agent has already responded on-chain
-                    has_responded = factory_contract.functions.hasAgentResponded(request_id, AGENT_EVM_ADDRESS).call()
-                    
-                    if not has_responded:
-                        ctx.logger.info(f"🔍 Found pending verification request! ID: {request_id}, User: {user}, Responses: {response_count}/5")
-                        new_pending += 1
+                    # Handle verification inline
+                    try:
+                        ctx.logger.info(f"Verification URI: {uri}")
                         
-                        # Mark as being processed locally
-                        processed_requests.add(request_id)
+                        # Get embedding for the verification image
+                        ctx.logger.info("Generating embedding for verification image...")
+                        verification_embedding = get_embeddings(uri)
+                        ctx.logger.info("✓ Embedding generated")
                         
-                        # Handle verification inline
-                        try:
-                            ctx.logger.info(f"Verification URI: {uri}")
+                        # Search Qdrant for similar NFTs
+                        ctx.logger.info("Searching for matching NFTs...")
+                        search_response = search_points(verification_embedding, limit=5)
+                        search_results = search_response.get("result", []) if isinstance(search_response, dict) else []
+                        
+                        if not search_results or len(search_results) == 0:
+                            ctx.logger.warning("No matching NFTs found. Responding with NOT_VERIFIED")
+                            verification_result = VerificationResult.NOT_VERIFIED
+                            matched_token_id = 0
+                        else:
+                            # Get the best match
+                            best_match = search_results[0]
+                            similarity_score = best_match.get("score", 0)
+                            matched_token_id = best_match.get("payload", {}).get("tokenId", 0)
                             
-                            # Get embedding for the verification image
-                            ctx.logger.info("Generating embedding for verification image...")
-                            verification_embedding = get_embeddings(uri)
-                            ctx.logger.info("✓ Embedding generated")
+                            ctx.logger.info(f"Search results: {len(search_results)} matches found")
                             
-                            # Search Qdrant for similar NFTs
-                            ctx.logger.info("Searching for matching NFTs...")
-                            search_response = search_points(verification_embedding, limit=5)
-                            search_results = search_response.get("result", []) if isinstance(search_response, dict) else []
+                            ctx.logger.info(f"Best match: NFT #{matched_token_id}, Similarity: {similarity_score:.4f}")
                             
-                            if not search_results or len(search_results) == 0:
-                                ctx.logger.warning("No matching NFTs found. Responding with NOT_VERIFIED")
+                            # Thresholds for verification
+                            VERIFIED_THRESHOLD = 0.95
+                            MODIFIED_THRESHOLD = 0.75
+                            
+                            if similarity_score >= VERIFIED_THRESHOLD:
+                                verification_result = VerificationResult.VERIFIED
+                                ctx.logger.info(f"✓ VERIFIED! Exact match with NFT #{matched_token_id}")
+                            elif similarity_score >= MODIFIED_THRESHOLD:
+                                verification_result = VerificationResult.MODIFIED
+                                ctx.logger.info(f"⚠ MODIFIED! Similar to NFT #{matched_token_id} but with modifications")
+                            else:
                                 verification_result = VerificationResult.NOT_VERIFIED
                                 matched_token_id = 0
-                            else:
-                                # Get the best match
-                                best_match = search_results[0]
-                                similarity_score = best_match.get("score", 0)
-                                matched_token_id = best_match.get("payload", {}).get("tokenId", 0)
-                                
-                                ctx.logger.info(f"Search results: {len(search_results)} matches found")
-                                
-                                ctx.logger.info(f"Best match: NFT #{matched_token_id}, Similarity: {similarity_score:.4f}")
-                                
-                                # Thresholds for verification
-                                VERIFIED_THRESHOLD = 0.95
-                                MODIFIED_THRESHOLD = 0.75
-                                
-                                if similarity_score >= VERIFIED_THRESHOLD:
-                                    verification_result = VerificationResult.VERIFIED
-                                    ctx.logger.info(f"✓ VERIFIED! Exact match with NFT #{matched_token_id}")
-                                elif similarity_score >= MODIFIED_THRESHOLD:
-                                    verification_result = VerificationResult.MODIFIED
-                                    ctx.logger.info(f"⚠ MODIFIED! Similar to NFT #{matched_token_id} but with modifications")
-                                else:
-                                    verification_result = VerificationResult.NOT_VERIFIED
-                                    matched_token_id = 0
-                                    ctx.logger.info(f"✗ NOT_VERIFIED. Similarity too low.")
-                            
-                            # Submit verification response to blockchain
-                            result_name = ["NONE", "VERIFIED", "MODIFIED", "NOT_VERIFIED"][verification_result]
-                            ctx.logger.info(f"Submitting response: result={result_name}, tokenId={matched_token_id}")
-                            
-                            response_tx = factory_contract.functions.responseVerification(
-                                request_id,
-                                verification_result,
-                                matched_token_id
-                            ).build_transaction({
-                                'from': AGENT_EVM_ADDRESS,
-                                'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
-                            })
-                            
-                            signed_response = agent_account.sign_transaction(response_tx)
-                            response_hash = w3.eth.send_raw_transaction(signed_response.raw_transaction)
-                            ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
-                            
-                            response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
-                            
-                            if response_receipt['status'] != 1:
-                                ctx.logger.error(f"Verification response transaction reverted! TX: {response_hash.hex()}")
-                            else:
-                                ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
-                        except Exception as e:
-                            ctx.logger.error(f"Failed to handle verification #{request_id}: {e}")
+                                ctx.logger.info(f"✗ NOT_VERIFIED. Similarity too low.")
+                        
+                        # Submit verification response to blockchain
+                        result_name = ["NONE", "VERIFIED", "MODIFIED", "NOT_VERIFIED"][verification_result]
+                        ctx.logger.info(f"Submitting response: result={result_name}, tokenId={matched_token_id}")
+                        
+                        response_tx = factory_contract.functions.responseVerification(
+                            request_id,
+                            verification_result,
+                            matched_token_id
+                        ).build_transaction({
+                            'from': AGENT_EVM_ADDRESS,
+                            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
+                        })
+                        
+                        signed_response = agent_account.sign_transaction(response_tx)
+                        response_hash = w3.eth.send_raw_transaction(signed_response.raw_transaction)
+                        ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
+                        
+                        response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
+                        
+                        if response_receipt['status'] != 1:
+                            ctx.logger.error(f"Verification response transaction reverted! TX: {response_hash.hex()}")
+                        else:
+                            ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
+                    except Exception as e:
+                        ctx.logger.error(f"Failed to handle verification #{request_id}: {e}")
                 
-                if new_pending > 0:
-                    ctx.logger.info(f"Processing {new_pending} new verification request(s)")
-                    
-        except Exception as e:
-            ctx.logger.error(f"Error polling for verification requests: {e}")
-        
-        await asyncio.sleep(5)
+            if new_pending > 0:
+                ctx.logger.info(f"Processing {new_pending} new verification request(s)")
+                
+    except Exception as e:
+        ctx.logger.error(f"Error polling for verification requests: {e}")
 
+@agent.on_interval(period=5)
 async def sync_nft_embeddings(ctx: Context):
     """Sync NFT embeddings from blockchain to Qdrant"""
-    while True:
-        try:
-            # Call syncAgent function from smart contract (RealiaFactory)
-            total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
-            ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
-            
-            # Check each NFT and create embedding if missing
-            for i in range(len(nft_ids)):
-                nft_id = nft_ids[i]
-                nft_uri = nft_uris[i]
-                
-                if not point_exists(nft_id):
-                    ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
-                    try:
-                        embedding = get_embeddings(nft_uri)
-                        create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
-                        ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
-                    except Exception as e:
-                        ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
-                else:
-                    ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
-            
-            ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
-        except Exception as e:
-            ctx.logger.error(f"Sync error: {e}")
+    try:
+        # Call syncAgent function from smart contract (RealiaFactory)
+        total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
+        ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
         
-        # Wait 30 seconds before next sync
-        await asyncio.sleep(30)
+        # Check each NFT and create embedding if missing
+        for i in range(len(nft_ids)):
+            nft_id = nft_ids[i]
+            nft_uri = nft_uris[i]
+            
+            if not point_exists(nft_id):
+                ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
+                try:
+                    embedding = get_embeddings(nft_uri)
+                    create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
+                    ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
+                except Exception as e:
+                    ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
+            else:
+                ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
+        
+        ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
+    except Exception as e:
+        ctx.logger.error(f"Sync error: {e}")
 
 @agent.on_event("startup")
 async def start(ctx: Context):
@@ -409,14 +404,6 @@ async def start(ctx: Context):
     # Initialize Qdrant collection
     qdrant_result = ensure_qdrant_collection()
     ctx.logger.info(f"QDRANT collection: {qdrant_result}")
-    
-    # Start verification request polling
-    asyncio.create_task(sync_verification_requests(ctx))
-    ctx.logger.info("✓ Started verification request polling (every 5s)")
-    
-    # Start NFT sync task
-    asyncio.create_task(sync_nft_embeddings(ctx))
-    ctx.logger.info("✓ Started NFT embedding sync task (every 30s)")
     
     ctx.logger.info("🚀 All services running!")
 
