@@ -128,6 +128,23 @@ export default function MintPage() {
     }
   }
 
+  // Returns boolean if allowance >= price (6 decimals)
+  const hasSufficientAllowance = async () => {
+    if (!address) return false
+    try {
+      const allowance = await readContract(config, {
+        address: PYUSD_ADDRESS,
+        abi: ERC20ABI,
+        functionName: "allowance",
+        args: [address, REALIA_ADDRESS],
+      }) as bigint
+      // allowance and amount are BigInt
+      return allowance >= parseUnits(MINT_PRICE, 6)
+    } catch (err) {
+      return false
+    }
+  }
+
   const handleApprove = async () => {
     setLoaderMessage("Requesting ERC20 approval...")
     try {
@@ -198,17 +215,28 @@ export default function MintPage() {
       signature = await signMessage(config, { message })
       setLoaderMessage("Signature verified.")
 
-      // Step 1: Approve ERC20
+      // Step 1: Approve ERC20 only if needed
+      let needsApproval = true
       try {
-        setLoaderMessage("Approving PYUSD for mint...")
-        await handleApprove()
-        setLoaderMessage("PYUSD approved.")
-      } catch (approveErr) {
-        setLoaderMessage("ERC20 Approve failed")
-        toast.error("ERC20 Approve failed (user denied or contract issue)")
-        setMinting(false)
-        setLoaderOpen(false)
-        return
+        setLoaderMessage("Checking PYUSD allowance...")
+        needsApproval = !(await hasSufficientAllowance())
+      } catch (err) {
+        needsApproval = true
+      }
+      if (needsApproval) {
+        try {
+          setLoaderMessage("Approving PYUSD for mint...")
+          await handleApprove()
+          setLoaderMessage("PYUSD approved.")
+        } catch (approveErr) {
+          setLoaderMessage("ERC20 Approve failed")
+          toast.error("ERC20 Approve failed (user denied or contract issue)")
+          setMinting(false)
+          setLoaderOpen(false)
+          return
+        }
+      } else {
+        setLoaderMessage("Allowance sufficient, skipping approval step.")
       }
 
       // Step 2: Check/Prepare Mint Order

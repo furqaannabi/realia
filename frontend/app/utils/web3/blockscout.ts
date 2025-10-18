@@ -1,8 +1,10 @@
 import { ethers } from "ethers";
 import { REALIA_ADDRESS } from "../config";
+import { readContract } from "@wagmi/core";
 
 const BLOCKSCOUT_BASE = "https://arbitrum-sepolia.blockscout.com/api";
-
+import RealiaFactoryABI from './Realia.json'
+import { config } from "../wallet";
 // Event signature hashes
 const EVENTS = {
     VerificationRequested: ethers.id("VerificationRequested(address,uint256)"),
@@ -28,6 +30,49 @@ function parseHex(hex: string) {
         return null;
     }
 }
+
+export async function getVerificationResponses(requestId: string) {
+    try {
+      let responses: any[] = []
+      let index = 0
+  
+      while (true) {
+        try {
+          const response = await readContract(config, {
+            address: REALIA_ADDRESS,
+            abi: RealiaFactoryABI.abi,
+            functionName: 'verificationResponses',
+            args: [BigInt(requestId), BigInt(index)],
+          })
+          responses.push(response)
+          index++
+        } catch (err: any) {
+          // When index is out of range, we’ll get an error → stop
+          break
+        }
+      }
+  
+      return responses
+    } catch (error) {
+      console.error('Error reading verificationResponses:', error)
+      return []
+    }
+  }
+
+  export async function getVerificationProgress(requestId: string) {
+    const REQUIRED = 5
+  
+    const responses = await getVerificationResponses(requestId)
+    const completed = responses.length
+  
+    return {
+      completed,
+      totalRequired: REQUIRED,
+      progressText: `${completed}/${REQUIRED} verified`,
+      responses
+    }
+  }
+  
 
 export async function getPendingVerifications() {
     try {
@@ -60,7 +105,7 @@ export async function getPendingVerifications() {
                     Array.isArray(log.topics)
             )
             .map((log: any) => {
-               
+
                 try {
                     if (
                         !Array.isArray(log.topics) ||
@@ -73,17 +118,17 @@ export async function getPendingVerifications() {
                     }
 
                     let decoded: any;
-           
+
                     try {
                         // Prevent invalid BytesLike value (null) in topics
                         // ethers.js throws if any topics element is null (INVALID_ARGUMENT)
-                        const safeTopics = Array.isArray(log.topics) ? log.topics.map(t => t ?? "0x") : [];
+                        const safeTopics = Array.isArray(log.topics) ? log.topics.map((t: any) => t ?? "0x") : [];
                         decoded = iface.decodeEventLog(
                             "VerificationRequested",
                             log.data,
                             safeTopics
                         );
-                   
+
                     } catch (err) {
                         // Decoding error (bad data)
                         console.error("Failed to decode VerificationRequested log:", { log, err });
@@ -97,7 +142,7 @@ export async function getPendingVerifications() {
                         : decoded.requestId ?? decoded[1]
                     );
 
-                   
+
 
                     // Convert non-string requestId to string if needed
                     if (typeof requestId !== "string" && (typeof requestId === "number" || typeof requestId === "bigint")) {
