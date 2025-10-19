@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { ChevronDown, Copy, Check, ExternalLink, AlertTriangle, Sparkles } from "lucide-react"
+import { ChevronDown, Copy, Check, ExternalLink, AlertTriangle, Sparkles, KeyRound } from "lucide-react"
 
 // --- STEP DATA ---
 interface Step {
@@ -60,6 +60,90 @@ const githubRepos = [
   }
 ]
 
+// --- ENV KEYS SUBSTEPS DATA ---
+const envPlatforms = [
+  {
+    key: "wallet-seed",
+    name: "WALLET_SEED",
+    icon: <KeyRound className="size-5 text-yellow-600" />,
+    steps: [
+      {
+        description: `In MetaMask, click your profile icon (top right), then go to <b>Settings</b> &rarr; <b>Security & Privacy</b> &rarr; <b>Reveal Secret Recovery Phrase</b>. (Or similar path in your chosen wallet tool.)`,
+        image: "agentverse/metamask_seed/1.png"
+      },
+      {
+        description: `Securely store the <b>12- or 24-word Secret Recovery Phrase</b> displayed. <span class="text-yellow-800 dark:text-yellow-200">Never share this phrase with anyone!</span>`,
+        image: "agentverse/metamask_seed/2.png"
+      },
+      {
+        description: `Paste your seed phrase into your <code>.env</code> file as the value for <code>WALLET_SEED</code>.`,
+        image: "agentverse/metamask_seed/3.png"
+      }
+    ]
+  },
+  {
+    key: "wallet-private-key",
+    name: "WALLET_PRIVATE_KEY",
+    icon: <KeyRound className="size-5 text-orange-600" />,
+    steps: [
+      {
+        description: `For MetaMask: Click the three bars (<b>menu icon</b>), then <b>Account details</b> &rarr; <b>Export Private Key</b>. <br />Only do this if you fully understand the risks—keep it confidential!`,
+        image: "agentverse/metamask_private_key/1.png"
+      },
+      {
+        description: `Copy your private key. <b>Keep it safe and never share it.</b>`,
+        image: "agentverse/metamask_private_key/2.png"
+      },
+      {
+        description: `Paste your private key into your <code>.env</code> file as the value for <code>WALLET_PRIVATE_KEY</code>.`,
+        image: "agentverse/metamask_private_key/3.png"
+      }
+    ]
+  },
+  {
+    key: "alchemy",
+    name: "ALCHEMY_API_KEY ",
+    icon: <KeyRound className="size-5 text-blue-600" />,
+    steps: [
+      {
+        description: `Go to <a href="https://dashboard.alchemy.com" target="_blank" rel="noopener noreferrer" class="underline text-blue-700 dark:text-blue-200 flex items-center gap-1">dashboard.alchemy.com<ExternalLink class="inline size-3 align-text-bottom" /></a> and sign up or log in.`,
+        image: "agentverse/alchemy/1.png"
+      },
+      {
+        description: `Click <strong>"Create App"</strong>, then select your desired network (e.g., Ethereum, Arbitrum, or Polygon).`,
+        image: "agentverse/alchemy/2.png"
+      },
+      {
+        description: `In your app settings, copy the <b>HTTP API Key</b>. Paste it in your <code>.env</code> file as <code>ALCHEMY_API_KEY</code>.`,
+        image: "agentverse/alchemy/3.png"
+      }
+    ]
+  },
+  {
+    key: "qdrant",
+    name: "QDRANT_API_KEY & QDRANT_BASE_URL ",
+    icon: <KeyRound className="size-5 text-green-700" />,
+    steps: [
+      {
+        description: `Go to <a href="https://cloud.qdrant.io" target="_blank" rel="noopener noreferrer" class="underline text-blue-700 dark:text-blue-200 flex items-center gap-1">cloud.qdrant.io<ExternalLink class="inline size-3 align-text-bottom" /></a> and sign up or log in.`,
+        image: "agentverse/qdrant/1.png"
+      },
+      {
+        description: `Create a cluster or select an existing one from the dashboard.`,
+        image: "agentverse/qdrant/2.png"
+      },
+      {
+        description: `In your cluster overview, copy the <b>API Key</b> <i>(for <code>QDRANT_API_KEY</code>)</i> and <b>Endpoint URL</b> <i>(for <code>QDRANT_BASE_URL</code>)</i>.`,
+        image: "agentverse/qdrant/3.png"
+      },
+      {
+        description: `Find your <b>QDRANT_BASE_URL</b> in your cluster's details and copy it.<br />`,
+        image: "agentverse/qdrant/4.png"
+      }
+    ]
+  }
+]
+
 // --- ENV EXAMPLE ---
 const envConfigExample = `# ────────────── Agentverse .env Example ──────────────
 
@@ -70,21 +154,21 @@ REALIA_NFT_CONTRACT_ADDRESS=0x26C6b15F92129a81C0BdEFC8998204Ed946E2Ecf
 
 # ─────── WALLET CONFIGURATION ───────
 
-# WALLET_SEED: (Recommended) Mnemonic seed phrase for your agent's wallet (leave blank if using WALLET_PRIVATE_KEY)
+# WALLET_SEED: (Required, mnemonic phrase for your agent's wallet. Provide either this or WALLET_PRIVATE_KEY.)
 WALLET_SEED=
 
-# WALLET_PRIVATE_KEY: Private key for your agent's wallet (used if WALLET_SEED is empty)
+# WALLET_PRIVATE_KEY: (Required if not using WALLET_SEED. Private key for your agent's wallet.)
 WALLET_PRIVATE_KEY=
 
 # ─────── AGENTVERSE CONNECTIONS ───────
 
-# ALCHEMY_API_KEY: Get your key at https://dashboard.alchemy.com (for blockchain access)
+# ALCHEMY_API_KEY: (Required) Blockchain access key, get at https://dashboard.alchemy.com
 ALCHEMY_API_KEY=
 
-# QDRANT_API_KEY: For vector DB (obtain from Qdrant Cloud, or leave empty for local no-auth)
+# QDRANT_API_KEY: (Required) For vector DB (obtain from Qdrant Cloud)
 QDRANT_API_KEY=
 
-# QDRANT_BASE_URL: Your Qdrant instance (eg. https://YOUR-CLOUD-URL or http://localhost:6333)
+# QDRANT_BASE_URL: (Required) Your Qdrant instance URL (eg. https://YOUR-CLOUD-URL)
 QDRANT_BASE_URL=
 `
 
@@ -115,6 +199,7 @@ function EnvBlock({ code }: { code: string }) {
 
 // Steps state
 type ExpandedStepsState = Record<string, boolean>
+type ExpandedEnvSubSteps = Record<string, boolean>
 
 // --- Github Instruction Box ---
 function GithubInstructionBox() {
@@ -146,6 +231,91 @@ function GithubInstructionBox() {
   )
 }
 
+// --- ENV KEYS BEAUTIFUL SUBSTEPS ---
+function EnvKeysGuide() {
+  const [expanded, setExpanded] = useState<ExpandedEnvSubSteps>({});
+  return (
+    <div className="mb-8 mt-4">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        viewport={{ once: true }}
+        className="rounded-2xl bg-gradient-to-tr from-blue-100/60 via-blue-50/40 to-white/40 dark:from-blue-900/30 dark:via-neutral-900/50 dark:to-neutral-900/30 border border-blue-300 dark:border-blue-700 px-4 py-6"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <KeyRound className="text-blue-600 dark:text-blue-200 size-5" />
+          <span className="font-semibold text-blue-800 dark:text-blue-100 text-lg">Get Your .env Keys (All Required)</span>
+        </div>
+        <p className="text-muted-foreground mb-4 text-sm max-w-2xl">
+          <b className="text-red-700 dark:text-red-300">All environment variables below are required.</b> Your agent will not work without configuring each one.
+        </p>
+        <div className="space-y-3">
+          {envPlatforms.map(platform => (
+            <div
+              key={platform.key}
+              className="rounded-xl bg-white/70 dark:bg-blue-950/30 shadow border border-white/20"
+            >
+              <button
+                onClick={() => setExpanded(e => ({ ...e, [platform.key]: !e[platform.key] }))}
+                className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50/40 dark:hover:bg-blue-900/30 transition rounded-xl"
+                aria-expanded={!!expanded[platform.key]}
+              >
+                <span className="flex items-center gap-2 text-blue-900 dark:text-blue-100 font-medium text-base">
+                  {platform.icon} {platform.name}
+                </span>
+                <ChevronDown
+                  className={`size-5 text-blue-500 transition-transform ${expanded[platform.key] ? "rotate-180" : ""}`}
+                />
+              </button>
+              <motion.div
+                initial={false}
+                animate={expanded[platform.key] ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                {expanded[platform.key] && (
+                  <ol className="divide-y divide-blue-100 dark:divide-blue-800 px-5 pb-4 pt-2 space-y-0.5">
+                    {platform.steps.map((s, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 py-3"
+                      >
+                        <div className="flex-shrink-0">
+                          <span className="inline-flex items-center justify-center rounded-full bg-blue-600 dark:bg-blue-800 text-white size-7 font-bold text-xs">{i + 1}</span>
+                        </div>
+                        <div className="flex-1">
+                          <div
+                            className="text-blue-950 dark:text-blue-200 text-sm"
+                            dangerouslySetInnerHTML={{
+                              __html: s.description
+                            }}
+                          />
+                          {s.image && (
+                            <div className="mt-3 mb-1 w-full rounded-lg overflow-hidden border border-blue-200 dark:border-blue-800 shadow-inner max-w-xl">
+                              <AspectRatio ratio={16 / 9}>
+                                <img
+                                  src={s.image}
+                                  alt={(platform.name || "") + ` step ${i + 1}`}
+                                  className="w-full h-full object-contain" 
+                                />
+                              </AspectRatio>
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </motion.div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 // --- PYUSD Wallet Tip for Step 5 ---
 function PyusdWalletTip() {
   return (
@@ -153,7 +323,7 @@ function PyusdWalletTip() {
       <AlertTriangle className="text-yellow-500 dark:text-yellow-200 size-5 flex-shrink-0" />
       <span className="font-semibold text-yellow-800 dark:text-yellow-100">
         <b>Important:</b> Before starting your agent, make sure your wallet has a minimum balance of{" "}
-        <span className="font-bold">0.05 PYUSD</span>.
+        <span className="font-bold">0.05 PYUSD and Some ETH too</span>.
       </span>
     </div>
   )
@@ -262,8 +432,13 @@ export default function GuidePage() {
                       </AspectRatio>
                     </div>
                   ) : null}
-                  {/* After step4, show the little instruction box with the provided github repos */}
-                  {step.id === "step4" && <GithubInstructionBox />}
+                  {/* After step4, show the little instruction box with the provided github repos and env keys guide */}
+                  {step.id === "step4" && (
+                    <>
+                      <GithubInstructionBox />
+                      <EnvKeysGuide />
+                    </>
+                  )}
                   {/* On step5, show the PYUSD wallet tip */}
                   {step.id === "step5" && <PyusdWalletTip />}
                 </motion.div>
@@ -272,24 +447,7 @@ export default function GuidePage() {
           ))}
         </div>
 
-        {/* ENV CONFIG EXAMPLE */}
-        <motion.section
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="mt-20 space-y-6"
-        >
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Environment Configuration (.env)</h2>
-            <p className="text-muted-foreground">
-              Configure your agent by setting the following variables in your <b>.env</b> file.
-              <br />
-              <span className="text-xs text-white/70">Best practice: copy the sample below as <code>.env</code> in your agent directory.</span>
-            </p>
-          </div>
-          <EnvBlock code={envConfigExample} />
-        </motion.section>
-
+       
         {/* FAQ */}
         <motion.section
           initial={{ opacity: 0 }}
@@ -300,10 +458,7 @@ export default function GuidePage() {
           <h2 className="text-3xl font-bold">FAQ</h2>
           <div className="space-y-4">
             {[
-              {
-                q: "Do I need to code?",
-                a: "No, Agentverse has a visual builder. JavaScript knowledge is optional for advanced customization.",
-              },
+              
               {
                 q: "How much does it cost?",
                 a: "Agentverse offers a free tier. Premium plans available for production deployments.",
@@ -315,6 +470,10 @@ export default function GuidePage() {
               {
                 q: "How do I monitor performance?",
                 a: "The dashboard provides real-time monitoring with logs and performance metrics.",
+              },
+              {
+                q: "Are all .env variables required?",
+                a: "Yes. To ensure your agent works properly, you must provide values for every listed .env variable.",
               },
             ].map((faq, i) => (
               <motion.div
