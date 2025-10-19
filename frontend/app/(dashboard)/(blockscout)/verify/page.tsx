@@ -20,6 +20,7 @@ import { AnimatePresence } from "framer-motion"
 import { ethers } from 'ethers'
 import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
 import { useTransactionPopup, useNotification } from "@blockscout/app-sdk";
+import { getResponseByAgent } from "@/app/utils/web3/blockscout"
 
 type ImgDims = { width: number; height: number }
 
@@ -94,21 +95,25 @@ export default function VerifyPage() {
     const [loadingApi, setLoadingApi] = React.useState(false)
 
     const [verificationId, setVerificationId] = React.useState<string | null>(null)
-    const { isVerified, loading: watcherLoading, error: watcherError, startWatcher } = useVerificationWatcher()
+    const { isVerified, loading: watcherLoading, error: watcherError, startWatcher, response } = useVerificationWatcher()
     const [watcherActive, setWatcherActive] = React.useState(false)
 
     // Blockscout app-sdk TransactionPopup
-    const { openPopup } = useTransactionPopup();
     const { openTxToast } = useNotification();
 
     React.useEffect(() => {
+        const getAgentResponse = async () => {
+            console.log(await getResponseByAgent(1))
+        }
         api.get('/verifications').then((res) => console.log("Verification", res)).catch((e) => {
             console.log(e)
         })
+
+        getAgentResponse()
     }, [])
     React.useEffect(() => {
-        console.log(isVerified, watcherLoading, watcherError)
-    }, [isVerified, watcherLoading, watcherError])
+        console.log(isVerified, watcherLoading, watcherError,response)
+    }, [isVerified, watcherLoading, watcherError,response])
 
     const [loaderMessages, setLoaderMessages] = React.useState<
         { step: number, type: "loading" | "done", message: string }[]
