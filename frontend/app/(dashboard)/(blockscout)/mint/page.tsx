@@ -10,12 +10,12 @@ import { StepBadge } from "@/components/step-badge"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { useAccount, useWriteContract } from "wagmi"
-import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../utils/config"
+import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../../utils/config"
 import { parseUnits } from "viem"
 import RealiaABI from "@/app/utils/web3/Realia.json";
 import ERC20ABI from "@/app/utils/web3/ERC20.json";
 import { signMessage, simulateContract, writeContract, readContract } from "@wagmi/core"
-import { config } from "../../utils/wallet"
+import { config } from "../../../utils/wallet"
 import { AnimatePresence } from "framer-motion"
 
 // Monochrome Loader Modal, in theme (black & white only)
