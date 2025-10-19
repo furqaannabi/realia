@@ -8,4 +8,4 @@ function LeaderBoard() {
   )
 }
 
-export default page
+export default LeaderBoard
