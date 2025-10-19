@@ -21,8 +21,10 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <Provider>
-          {children}
-          <Toaster />
+          
+            {children}
+            <Toaster />
+
         </Provider>
       </body>
     </html>

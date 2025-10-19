@@ -8,21 +8,30 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { UploadCloud, ImageIcon, CheckCircle2, Loader2, AlertTriangle, RefreshCcw } from "lucide-react"
 import { toast } from "sonner"
-import { api } from "../../utils/axiosInstance"
+import { api } from "../../../utils/axiosInstance"
 import { useAccount, useWriteContract } from "wagmi"
-import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../utils/config"
+import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../../utils/config"
 import RealiaABI from "@/app/utils/web3/Realia.json"
 import ERC20ABI from "@/app/utils/web3/ERC20.json"
 import { parseUnits } from "viem"
 import { readContract, simulateContract, writeContract } from "@wagmi/core"
-import { config } from "../../utils/wallet"
+import { config } from "../../../utils/wallet"
 import { AnimatePresence } from "framer-motion"
 import { ethers } from 'ethers'
 import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
+import { useTransactionPopup, useNotification } from "@blockscout/app-sdk";
+
 type ImgDims = { width: number; height: number }
 
 const VERIFY_PRICE = "5";
 const ORDER_TYPE_VERIFY = 2;
+
+// Utility: convert chain id for blockscout useTxToast & related hooks
+function mapBlockscoutChainId(chainId: number | string): string {
+    // 421614 --> 1500, else stays the same
+    if (chainId === 421614 || chainId === "421614") return "1500";
+    return String(chainId);
+}
 
 function formatBytes(bytes: number) {
     if (bytes === 0) return "0 B"
@@ -88,6 +97,10 @@ export default function VerifyPage() {
     const { isVerified, loading: watcherLoading, error: watcherError, startWatcher } = useVerificationWatcher()
     const [watcherActive, setWatcherActive] = React.useState(false)
 
+    // Blockscout app-sdk TransactionPopup
+    const { openPopup } = useTransactionPopup();
+    const { openTxToast } = useNotification();
+
     React.useEffect(() => {
         api.get('/verifications').then((res) => console.log("Verification", res)).catch((e) => {
             console.log(e)
@@ -101,7 +114,7 @@ export default function VerifyPage() {
         { step: number, type: "loading" | "done", message: string }[]
     >([])
 
-    const { address } = useAccount()
+    const { address, chain } = useAccount()
     const { writeContractAsync: writeApprove } = useWriteContract()
 
     // Helper: check if current allowance is sufficient
@@ -144,12 +157,20 @@ export default function VerifyPage() {
     const handleApprove = async () => {
         setLoadingApprove(true)
         try {
-            await writeApprove({
+            // The returned value is actually a hash directly, type: `0x${string}`
+            const txHash = await writeApprove({
                 address: PYUSD_ADDRESS,
                 abi: ERC20ABI,
                 functionName: "approve",
                 args: [REALIA_ADDRESS, parseUnits(VERIFY_PRICE, 4)],
             })
+            // Show tx popup on approval
+            if (txHash && chain?.id && address) {
+                openTxToast(
+                    mapBlockscoutChainId(chain.id),
+                    txHash,
+                );
+            }
         } catch (err) {
             console.error("Approve failed:", err)
             throw err
@@ -168,7 +189,14 @@ export default function VerifyPage() {
                 args: [ORDER_TYPE_VERIFY],
                 account: address,
             })
-            await writeContract(config, request)
+            // The returned value is a hash
+            const txHash = await writeContract(config, request)
+            if (txHash && chain?.id && address) {
+                openTxToast(
+                    mapBlockscoutChainId(chain.id),
+                    txHash,
+                );
+            }
         } catch (err) {
             console.error("Order create failed:", err)
             throw err
@@ -378,7 +406,7 @@ export default function VerifyPage() {
         try {
             const d = await getImageDimensions(f)
             setDims(d)
-        } catch {}
+        } catch { }
     }
 
     const onDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
@@ -422,17 +450,17 @@ export default function VerifyPage() {
     }
 
     function ChatLoaderPipeline() {
+        // Only show spinner/step text now, TransactionPopup is managed by blockscout sdk
         return (
             <div className="w-full flex flex-col items-start gap-2 pb-2 text-sm">
                 <AnimatePresence mode="wait">
-                {loaderMessages.map((msg, i) => (
+                    {loaderMessages.map((msg, i) => (
                         <span
                             key={msg.step}
-                            className={`rounded-full px-3 py-1 mb-0.5 shadow ${
-                                msg.type === "done"
-                                    ? "bg-black text-white font-bold border border-white/10"
-                                    : "bg-zinc-900/80 text-zinc-300"
-                            }`}
+                            className={`rounded-full px-3 py-1 mb-0.5 shadow ${msg.type === "done"
+                                ? "bg-black text-white font-bold border border-white/10"
+                                : "bg-zinc-900/80 text-zinc-300"
+                                }`}
                         >
                             {msg.type === "done"
                                 ? msg.message.replace("...", " ✓")
@@ -623,71 +651,71 @@ export default function VerifyPage() {
                             </div>
                         )}
                         <AnimatePresence>
-                        {file && overallLoading && (
-                            <div
-                                className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
-                            >
-                                <ChatLoaderPipeline />
-                                <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
-                                        style={{ width: `${stepProgressPercent}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        </AnimatePresence>
-                        <AnimatePresence>
-                        {file && !overallLoading && verificationError && (
-                            <ErrorDisplay err={verificationError} retry={onVerify} disabled={overallLoading} />
-                        )}
-                        </AnimatePresence>
-                        <AnimatePresence>
-                        {file && !overallLoading && !verificationError && verified && (
-                            <div
-                            >
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div
-                                      className="flex items-center gap-2"
-                                    >
-                                        <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
-                                            <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
-                                            Complete
-                                        </Badge>
-                                        {dims && (
-                                            <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
-                                        )}
+                            {file && overallLoading && (
+                                <div
+                                    className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
+                                >
+                                    <ChatLoaderPipeline />
+                                    <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
+                                            style={{ width: `${stepProgressPercent}%` }}
+                                        />
                                     </div>
                                 </div>
-                                <Separator className="my-4 bg-white/10" />
-                                <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                        <div>
-                                            <div className="text-xs uppercase tracking-wide text-zinc-400">Result</div>
-                                            <div className="mt-1 text-2xl font-bold flex items-end text-white">
-                                                <span>Verified on-chain</span>
+                            )}
+                        </AnimatePresence>
+                        <AnimatePresence>
+                            {file && !overallLoading && verificationError && (
+                                <ErrorDisplay err={verificationError} retry={onVerify} disabled={overallLoading} />
+                            )}
+                        </AnimatePresence>
+                        <AnimatePresence>
+                            {file && !overallLoading && !verificationError && verified && (
+                                <div
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div
+                                            className="flex items-center gap-2"
+                                        >
+                                            <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
+                                                <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
+                                                Complete
+                                            </Badge>
+                                            {dims && (
+                                                <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Separator className="my-4 bg-white/10" />
+                                    <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-zinc-400">Result</div>
+                                                <div className="mt-1 text-2xl font-bold flex items-end text-white">
+                                                    <span>Verified on-chain</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+
+                                    <dl
+                                        className="grid grid-cols-3 gap-4 text-sm"
+                                    >
+                                        <dt className="col-span-1 text-zinc-400 font-semibold">File name</dt>
+                                        <dd className="col-span-2 truncate">{file.name}</dd>
+
+                                        <dt className="col-span-1 text-zinc-400 font-semibold">MIME type</dt>
+                                        <dd className="col-span-2">{file.type || "image"}</dd>
+
+                                        <dt className="col-span-1 text-zinc-400 font-semibold">Size</dt>
+                                        <dd className="col-span-2">{formatBytes(file.size)}</dd>
+
+                                        <dt className="col-span-1 text-zinc-400 font-semibold">Dimensions</dt>
+                                        <dd className="col-span-2">{dims ? `${dims.width} × ${dims.height}` : verified ? "Unknown" : "—"}</dd>
+                                    </dl>
                                 </div>
-
-                                <dl
-                                    className="grid grid-cols-3 gap-4 text-sm"
-                                >
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">File name</dt>
-                                    <dd className="col-span-2 truncate">{file.name}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">MIME type</dt>
-                                    <dd className="col-span-2">{file.type || "image"}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">Size</dt>
-                                    <dd className="col-span-2">{formatBytes(file.size)}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">Dimensions</dt>
-                                    <dd className="col-span-2">{dims ? `${dims.width} × ${dims.height}` : verified ? "Unknown" : "—"}</dd>
-                                </dl>
-                            </div>
-                        )}
+                            )}
                         </AnimatePresence>
                     </CardContent>
                 </Card>
