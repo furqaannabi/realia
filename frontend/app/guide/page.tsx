@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { ChevronDown, Copy, Check, ExternalLink, AlertTriangle } from "lucide-react"
+import { ChevronDown, Copy, Check, ExternalLink, AlertTriangle, Sparkles } from "lucide-react"
 
 // --- STEP DATA ---
 interface Step {
@@ -159,6 +159,31 @@ function PyusdWalletTip() {
   )
 }
 
+function PageHero() {
+  return (
+    <div className="mb-12">
+      <motion.div
+        initial={{ opacity: 0, y: -15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex flex-col items-center pt-8 pb-8"
+      >
+        <span className="inline-flex items-center gap-2 px-5 py-2 mb-3 bg-gradient-to-r from-blue-500/80 via-teal-400/80 to-violet-500/80 rounded-full text-white font-semibold shadow-md text-sm">
+          <Sparkles className="size-5 text-yellow-100 drop-shadow" />
+          New in Web3 Automation
+          <Sparkles className="size-5 text-yellow-100 drop-shadow" />
+        </span>
+        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-center bg-clip-text text-transparent bg-gradient-to-br from-white to-blue-200">
+          Agentverse Quickstart Guide
+        </h1>
+        <p className="mt-5 text-lg md:text-xl text-muted-foreground text-center max-w-2xl">
+          Everything you need to launch your first onchain AI agent. No crypto or AI knowledge required.
+        </p>
+      </motion.div>
+    </div>
+  )
+}
+
 export default function GuidePage() {
   const [expandedSteps, setExpandedSteps] = useState<ExpandedStepsState>({})
 
@@ -172,7 +197,10 @@ export default function GuidePage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="p-6 md:p-12 max-w-6xl mx-auto">
-        {/* Header */}
+        {/* New Hero Header for stronger intro */}
+        <PageHero />
+
+        {/* Old Header (kept for structure; can be removed or repurposed if preferred) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 mb-16">
           <h1 className="text-5xl md:text-6xl font-bold">Agentverse Guide</h1>
           <p className="text-xl text-muted-foreground max-w-3xl">
