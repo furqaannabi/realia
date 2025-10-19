@@ -8,8 +8,8 @@ import { Separator } from "@/components/ui/separator"
 import { Loader2, CheckCircle2, TimerIcon, ExternalLink } from "lucide-react"
 import RecentMints from "@/components/RecentMints"
 import { useEffect, useState } from "react"
-import { getPendingVerifications, getVerificationProgress } from "../utils/web3/blockscout"
-import { api } from "../utils/axiosInstance"
+import { getPendingVerifications, getVerificationProgress } from "../../utils/web3/blockscout"
+import { api } from "../../utils/axiosInstance"
 import { toast } from "sonner"
 
 // --- Skeleton loader components for dashboard cards ---
