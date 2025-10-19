@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Shield, Zap, Globe } from "lucide-react"
+import { ArrowRight, Shield, Zap, Globe, BookOpen } from "lucide-react"
 
 export default function Home() {
   return (
@@ -25,6 +25,12 @@ export default function Home() {
             <Link href="/verify">
               <Button size="lg" variant="outline" className="border-zinc-600 text-white hover:bg-zinc-800">
                 Verify Asset
+              </Button>
+            </Link>
+            <Link href="/guide">
+              <Button size="lg" variant="outline" className="border-zinc-600 text-white hover:bg-zinc-800 flex items-center">
+                <BookOpen className="mr-2 h-4 w-4" />
+                Guide
               </Button>
             </Link>
           </div>
