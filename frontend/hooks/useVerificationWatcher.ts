@@ -47,6 +47,8 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
         }
 
         const res = await getResponseByAgent(verificationId);
+
+        console.log("Response By agent",res)
         setAttemptCount((prev) => prev + 1);
 
         if (res && Array.isArray(res) && res.length > 0) {
