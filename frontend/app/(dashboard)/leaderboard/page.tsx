@@ -90,7 +90,7 @@ async function getAgentStruct(address: string): Promise<Agent | null> {
   }
 }
 
-function useLeaderboardAgents() {
+export function useLeaderboardAgents() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -131,7 +131,9 @@ function useLeaderboardAgents() {
       .map((a, idx) => ({ ...a, rank: idx + 1 }))
   }, [agents])
 
-  return { agents: ranked, loading }
+  // INSERT_YOUR_CODE
+  const agentsCount = ranked.length;
+  return { agents: ranked, loading, agentsCount }
 }
 
 // Click-to-copy cell for agent addresses
