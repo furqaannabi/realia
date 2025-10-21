@@ -12,7 +12,7 @@ contract RealiaFactory is Ownable {
   uint256 constant public VERIFY_PRICE = 5e4;
   uint256 constant public MIN_AGENT_STAKING = 5e4;
   uint256 constant public PROTOCOL_FEE_PERCENTAGE = 10;
-  uint256 constant public REQUIRED_VERIFICATIONS = 5;
+  uint256 constant public REQUIRED_VERIFICATIONS = 2;
   IERC20 public constant PYUSD = IERC20(0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1);
   uint256 public verificationId = 0;
   IRealiaNFT public realiaNFT;

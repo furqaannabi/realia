@@ -1,17 +1,30 @@
-# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
+# Realia Smart Contracts
 
-This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+This directory contains the smart contracts for the Realia platform, built with Hardhat 3.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Configuration Values
+
+### Current (Hackathon Demo)
+- **REQUIRED_VERIFICATIONS**: 2
+- **MINT_PRICE**: 1 PYUSD
+- **VERIFY_PRICE**: 0.05 PYUSD
+- **MIN_AGENT_STAKING**: 0.05 PYUSD
+
+### Post-Hackathon Production Values
+- **REQUIRED_VERIFICATIONS**: 5
+- **MINT_PRICE**: 5 PYUSD
+- **VERIFY_PRICE**: 0.5 PYUSD
+- **MIN_AGENT_STAKING**: 500 PYUSD
 
 ## Project Overview
 
-This example project includes:
+This project includes:
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+- RealiaFactory and RealiaNFT smart contracts
+- A simple Hardhat configuration file
+- Foundry-compatible Solidity unit tests
+- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/)
+- Examples demonstrating how to connect to different types of networks
 
 ## Usage
 

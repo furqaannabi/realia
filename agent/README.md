@@ -34,7 +34,7 @@ QDRANT_BASE_URL=https://your-qdrant-instance.io
 # Embedding Service
 EMBEDDING_URL=https://your-embedding-service.com
 
-# Chat AI (Optional)
+# Chat AI
 ASI_ONE_API_KEY=your_asi_api_key  # For chat functionality
 ```
 
