@@ -132,7 +132,7 @@ function AgentResponsesTable({ responses, totalAgents }: { responses: any[], tot
                                     <td className="py-2 px-2">{r.blockNumber}</td>
                                     <td className="py-2 px-2 font-mono">
                                         {r.txHash ?
-                                            <a href={`https://arbitrum-sepolia.blockscout.com/tx/${r.txHash}`} className="underline text-blue-300" target="_blank" rel="noopener noreferrer">
+                                            <a href={`https://arbitrum-realia.cloud.blockscout.com/tx/${r.txHash}`} className="underline text-blue-300" target="_blank" rel="noopener noreferrer">
                                                 {`${r.txHash.slice(0, 10)}...${r.txHash.slice(-5)}`}
                                             </a> : "--"}
                                     </td>
