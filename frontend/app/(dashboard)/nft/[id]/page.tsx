@@ -15,7 +15,7 @@ import { REALIA_NFT_ADDRESS } from "@/app/utils/config";
 const BLOCKSCOUT_BASE_URL =
   process.env.NEXT_PUBLIC_BLOCKCHAIN_NETWORK === "mainnet"
     ? "https://blockscout.scroll.io"
-    : "https://arbitrum-sepolia.blockscout.com";
+    : "https://arbitrum-realia.cloud.blockscout.com";
 
 // Helper to truncate addresses
 function shortAddress(addr: string | undefined, len = 6) {
