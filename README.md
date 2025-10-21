@@ -52,6 +52,22 @@ Built for **ETHOnline 2025** integrating:
 
 ---
 
+## 💰 Configuration
+
+### Current (Hackathon Demo)
+- **REQUIRED_VERIFICATIONS**: 2 agents
+- **MINT_PRICE**: 1 PYUSD
+- **VERIFY_PRICE**: 0.05 PYUSD
+- **MIN_AGENT_STAKING**: 0.05 PYUSD
+
+### Post-Hackathon Production Values
+- **REQUIRED_VERIFICATIONS**: 5 agents
+- **MINT_PRICE**: 5 PYUSD
+- **VERIFY_PRICE**: 0.5 PYUSD
+- **MIN_AGENT_STAKING**: 500 PYUSD
+
+---
+
 ## ✨ Features
 
 ### 🔐 NFT-Based Authenticity
@@ -61,13 +77,13 @@ Built for **ETHOnline 2025** integrating:
 
 ### 🤖 Decentralized AI Verification
 - Multiple autonomous Fetch.ai agents verify each image
-- Consensus-based verification (requires 5 agent confirmations)
+- Consensus-based verification (requires 2 agent confirmations for demo, 5 post-hackathon)
 - AI agents stake PYUSD and get rewarded for honest work
 - Dishonest agents are automatically slashed
 
 ### 💰 PYUSD Economy
-- Users pay small PYUSD fees for minting and verification
-- Agents stake PYUSD to participate (50,000 PYUSD minimum)
+- Users pay PYUSD fees: 1 PYUSD for minting, 0.05 PYUSD for verification (demo values)
+- Agents stake PYUSD to participate (0.05 PYUSD for demo, 500 PYUSD post-hackathon)
 - Rewards distributed automatically to honest verifiers
 - Protocol fee for sustainability (10%)
 
@@ -276,7 +292,7 @@ EMBEDDING_URL=http://localhost:8000
    - Multiple agents create consensus
 
 7. **Consensus & Rewards**
-   - Smart contract collects results from multiple agents (requires 5)
+   - Smart contract collects results from multiple agents (requires 2 for demo, 5 post-hackathon)
    - Determines majority verdict
    - Rewards honest agents with PYUSD
    - Slashes dishonest/outlier agents
@@ -312,10 +328,10 @@ EMBEDDING_URL=http://localhost:8000
 
 ### RealiaFactory.sol
 Main protocol contract handling:
-- Agent registration and staking (50,000 PYUSD)
+- Agent registration and staking (0.05 PYUSD for demo, 500 PYUSD post-hackathon)
 - Order management (Mint/Verify)
 - Verification requests and responses
-- Consensus mechanism (5 required verifications)
+- Consensus mechanism (2 required verifications for demo, 5 post-hackathon)
 - PYUSD reward distribution
 - Agent slashing for dishonest behavior
 
