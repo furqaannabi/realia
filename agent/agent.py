@@ -1,9 +1,20 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import asyncio, os, requests, json, base64
+import os, requests, json, base64
 from web3 import Web3
-from uagents import Agent, Context
+from uagents import Context, Protocol, Agent
+from uagents_core.contrib.protocols.chat import (
+    ChatAcknowledgement,
+    ChatMessage,
+    EndSessionContent,
+    TextContent,
+    chat_protocol_spec,
+)
+from openai import OpenAI
+from datetime import datetime
+from uuid import uuid4
+
 
 # ============================================================================
 # ABI Definitions
@@ -34,8 +45,11 @@ REALIA_FACTORY_ABI = [
     {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "registerAgent", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "string", "name": "agentAddress", "type": "string"}], "name": "updateAgentAddress", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "name": "verificationRequests", "outputs": [{"internalType": "address", "name": "user", "type": "address"}, {"internalType": "string", "name": "uri", "type": "string"}, {"internalType": "bool", "name": "processed", "type": "bool"}, {"internalType": "uint256", "name": "requestTime", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}, {"internalType": "uint256", "name": "", "type": "uint256"}], "name": "verificationResponses", "outputs": [{"internalType": "address", "name": "agent", "type": "address"}, {"internalType": "enum VerificationResult", "name": "result", "type": "uint8"}, {"internalType": "uint256", "name": "tokenId", "type": "uint256"}, {"internalType": "uint256", "name": "responseTime", "type": "uint256"}], "stateMutability": "view", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}, {"internalType": "enum VerificationResult", "name": "result", "type": "uint8"}, {"internalType": "uint256", "name": "propertyTokenId", "type": "uint256"}], "name": "responseVerification", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
-    {"inputs": [], "name": "syncAgent", "outputs": [{"internalType": "uint256", "name": "totalCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "nftIds", "type": "uint256[]"}, {"internalType": "string[]", "name": "nftUris", "type": "string[]"}], "stateMutability": "view", "type": "function"}
+    {"inputs": [], "name": "syncAgent", "outputs": [{"internalType": "uint256", "name": "totalCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "nftIds", "type": "uint256[]"}, {"internalType": "string[]", "name": "nftUris", "type": "string[]"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "syncPendingVerifications", "outputs": [{"internalType": "uint256", "name": "pendingCount", "type": "uint256"}, {"internalType": "uint256[]", "name": "requestIds", "type": "uint256[]"}, {"internalType": "address[]", "name": "users", "type": "address[]"}, {"internalType": "string[]", "name": "uris", "type": "string[]"}, {"internalType": "uint256[]", "name": "responseCounts", "type": "uint256[]"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}, {"internalType": "address", "name": "agent", "type": "address"}], "name": "hasAgentResponded", "outputs": [{"internalType": "bool", "name": "hasResponded", "type": "bool"}], "stateMutability": "view", "type": "function"}
 ]
 
 # RealiaNFT ABI - contains only the functions/events used by the agent
@@ -130,6 +144,7 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL")
 WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
 
 w3 = Web3(Web3.HTTPProvider(f"https://arb-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"))
 factory_contract = w3.eth.contract(address=FACTORY_ADDRESS, abi=REALIA_FACTORY_ABI)
@@ -141,6 +156,13 @@ AGENT_EVM_ADDRESS = agent_account.address
 
 # --- Agent Setup ---
 agent = Agent(name="realia_agent", seed=WALLET_SEED, port=8001)
+subject_matter = "the sun"
+client = OpenAI(
+    base_url='https://api.asi1.ai/v1',
+    api_key=ASI_ONE_API_KEY,
+)
+
+protocol = Protocol(spec=chat_protocol_spec)
 
 async def check_and_register_agent(ctx: Context):
     """Check if agent is registered, if not attempt to register"""
@@ -246,79 +268,141 @@ async def check_and_register_agent(ctx: Context):
         ctx.logger.error(f"Failed to check/register agent: {e}")
         raise e
 
-async def listen_for_verification_events(ctx: Context):
-    """Listen for verification request events from the blockchain"""
-    event_filter = factory_contract.events.VerificationRequested.create_filter(from_block="latest")
-    while True:
-        for event in event_filter.get_new_entries():
-            data = event["args"]
-            request_id = data["requestId"]
-            user_address = data["user"]
-            ctx.logger.info(f"🔍 New verification request! ID: {request_id}, User: {user_address}")
+@agent.on_interval(period=5)
+async def sync_verification_requests(ctx: Context):
+    """Poll for pending verification requests every 5 seconds using syncPendingVerifications"""
+    processed_requests = set()  # Track which requests we've already processed locally
+    
+    try:
+            # Call syncPendingVerifications to get all pending verifications
+            pending_count, request_ids, users, uris, response_counts = factory_contract.functions.syncPendingVerifications().call()
             
-            # Handle verification asynchronously
-            asyncio.create_task(handle_verification(ctx, request_id))
-        
-        await asyncio.sleep(5)
-
-async def listen_for_mint_events(ctx: Context):
-    """Listen for new NFT mint events and create embeddings immediately"""
-    event_filter = nft_contract.events.Minted.create_filter(from_block="latest")
-    while True:
-        for event in event_filter.get_new_entries():
-            data = event["args"]
-            token_id = data["tokenId"]
-            to_address = data["to"]
-            ctx.logger.info(f"🎉 New NFT minted! Token ID: {token_id}, Owner: {to_address}")
-            
-            try:
-                # Get the token URI from the contract
-                token_uri = nft_contract.functions.tokenURI(token_id).call()
-                ctx.logger.info(f"Fetching URI for NFT #{token_id}: {token_uri}")
+            if pending_count > 0:
+                ctx.logger.info(f"Syncing pending verification request(s) from contract")
                 
-                # Create embedding if it doesn't exist
-                if not point_exists(token_id):
-                    ctx.logger.info(f"Creating embedding for newly minted NFT #{token_id}")
-                    embedding = get_embeddings(token_uri)
-                    create_point(token_id, embedding, {"tokenId": token_id, "uri": token_uri, "owner": to_address})
-                    ctx.logger.info(f"✓ Embedding created for NFT #{token_id}")
-                else:
-                    ctx.logger.info(f"Embedding already exists for NFT #{token_id}")
-            except Exception as e:
-                ctx.logger.error(f"Failed to process minted NFT #{token_id}: {e}")
-        
-        await asyncio.sleep(5)
+                new_pending = 0
+                for i in range(pending_count):
+                    request_id = request_ids[i]
+                    user = users[i]
+                    uri = uris[i]
+                    response_count = response_counts[i]
+                    
+                    # Check if we've already processed this request locally
+                    if request_id in processed_requests:
+                        continue
+                    
+                    # Check if this agent has already responded on-chain
+                    has_responded = factory_contract.functions.hasAgentResponded(request_id, AGENT_EVM_ADDRESS).call()
+                    
+                    if not has_responded:
+                        ctx.logger.info(f"🔍 Found pending verification request! ID: {request_id}, User: {user}, Responses: {response_count}/5")
+                        new_pending += 1
+                        
+                        # Mark as being processed locally
+                        processed_requests.add(request_id)
+                        
+                        # Handle verification inline
+                        try:
+                            ctx.logger.info(f"Verification URI: {uri}")
+                            
+                            # Get embedding for the verification image
+                            ctx.logger.info("Generating embedding for verification image...")
+                            verification_embedding = get_embeddings(uri)
+                            ctx.logger.info("✓ Embedding generated")
+                            
+                            # Search Qdrant for similar NFTs
+                            ctx.logger.info("Searching for matching NFTs...")
+                            search_response = search_points(verification_embedding, limit=5)
+                            search_results = search_response.get("result", []) if isinstance(search_response, dict) else []
+                            
+                            if not search_results or len(search_results) == 0:
+                                ctx.logger.warning("No matching NFTs found. Responding with NOT_VERIFIED")
+                                verification_result = VerificationResult.NOT_VERIFIED
+                                matched_token_id = 0
+                            else:
+                                # Get the best match
+                                best_match = search_results[0]
+                                similarity_score = best_match.get("score", 0)
+                                matched_token_id = best_match.get("payload", {}).get("tokenId", 0)
+                                
+                                ctx.logger.info(f"Search results: {len(search_results)} matches found")
+                                
+                                ctx.logger.info(f"Best match: NFT #{matched_token_id}, Similarity: {similarity_score:.4f}")
+                                
+                                # Thresholds for verification
+                                VERIFIED_THRESHOLD = 0.95
+                                MODIFIED_THRESHOLD = 0.75
+                                
+                                if similarity_score >= VERIFIED_THRESHOLD:
+                                    verification_result = VerificationResult.VERIFIED
+                                    ctx.logger.info(f"✓ VERIFIED! Exact match with NFT #{matched_token_id}")
+                                elif similarity_score >= MODIFIED_THRESHOLD:
+                                    verification_result = VerificationResult.MODIFIED
+                                    ctx.logger.info(f"⚠ MODIFIED! Similar to NFT #{matched_token_id} but with modifications")
+                                else:
+                                    verification_result = VerificationResult.NOT_VERIFIED
+                                    matched_token_id = 0
+                                    ctx.logger.info(f"✗ NOT_VERIFIED. Similarity too low.")
+                            
+                            # Submit verification response to blockchain
+                            result_name = ["NONE", "VERIFIED", "MODIFIED", "NOT_VERIFIED"][verification_result]
+                            ctx.logger.info(f"Submitting response: result={result_name}, tokenId={matched_token_id}")
+                            
+                            response_tx = factory_contract.functions.responseVerification(
+                                request_id,
+                                verification_result,
+                                matched_token_id
+                            ).build_transaction({
+                                'from': AGENT_EVM_ADDRESS,
+                                'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
+                            })
+                            
+                            signed_response = agent_account.sign_transaction(response_tx)
+                            response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
+                            ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
+                            
+                            response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
+                            
+                            if response_receipt['status'] != 1:
+                                ctx.logger.error(f"Verification response transaction reverted! TX: {response_hash.hex()}")
+                            else:
+                                ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
+                        except Exception as e:
+                            ctx.logger.error(f"Failed to handle verification #{request_id}: {e}")
+                
+                if new_pending > 0:
+                    ctx.logger.info(f"Processing {new_pending} new verification request(s)")
+                    
+    except Exception as e:
+        ctx.logger.error(f"Error polling for verification requests: {e}")
 
+@agent.on_interval(period=5)
 async def sync_nft_embeddings(ctx: Context):
     """Sync NFT embeddings from blockchain to Qdrant"""
-    while True:
-        try:
-            # Call syncAgent function from smart contract (RealiaFactory)
-            total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
-            ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
-            
-            # Check each NFT and create embedding if missing
-            for i in range(len(nft_ids)):
-                nft_id = nft_ids[i]
-                nft_uri = nft_uris[i]
-                
-                if not point_exists(nft_id):
-                    ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
-                    try:
-                        embedding = get_embeddings(nft_uri)
-                        create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
-                        ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
-                    except Exception as e:
-                        ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
-                else:
-                    ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
-            
-            ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
-        except Exception as e:
-            ctx.logger.error(f"Sync error: {e}")
+    try:
+        # Call syncAgent function from smart contract (RealiaFactory)
+        total_count, nft_ids, nft_uris = factory_contract.functions.syncAgent().call()
+        ctx.logger.info(f"Syncing {total_count} NFTs from blockchain")
         
-        # Wait 30 seconds before next sync
-        await asyncio.sleep(30)
+        # Check each NFT and create embedding if missing
+        for i in range(len(nft_ids)):
+            nft_id = nft_ids[i]
+            nft_uri = nft_uris[i]
+            
+            if not point_exists(nft_id):
+                ctx.logger.info(f"Creating embedding for NFT #{nft_id}")
+                try:
+                    embedding = get_embeddings(nft_uri)
+                    create_point(nft_id, embedding, {"tokenId": nft_id, "uri": nft_uri})
+                    ctx.logger.info(f"✓ Created embedding for NFT #{nft_id}")
+                except Exception as e:
+                    ctx.logger.error(f"Failed to create embedding for NFT #{nft_id}: {e}")
+            else:
+                ctx.logger.debug(f"Embedding already exists for NFT #{nft_id}")
+        
+        ctx.logger.info(f"Sync complete. Total NFTs: {total_count}")
+    except Exception as e:
+        ctx.logger.error(f"Sync error: {e}")
 
 @agent.on_event("startup")
 async def start(ctx: Context):
@@ -340,105 +424,75 @@ async def start(ctx: Context):
     qdrant_result = ensure_qdrant_collection()
     ctx.logger.info(f"QDRANT collection: {qdrant_result}")
     
-    # Start verification event listener
-    asyncio.create_task(listen_for_verification_events(ctx))
-    ctx.logger.info("✓ Started verification event listener")
-    
-    # Start mint event listener
-    asyncio.create_task(listen_for_mint_events(ctx))
-    ctx.logger.info("✓ Started mint event listener")
-    
-    # Start NFT sync task
-    asyncio.create_task(sync_nft_embeddings(ctx))
-    ctx.logger.info("✓ Started NFT embedding sync task")
-    
     ctx.logger.info("🚀 All services running!")
 
-async def handle_verification(ctx: Context, request_id: int):
-    """
-    Handle verification request by:
-    1. Fetching verification request details from blockchain
-    2. Getting embedding for the verification image
-    3. Searching Qdrant for similar NFTs
-    4. Submitting verification response to blockchain
-    """
+
+@protocol.on_message(ChatMessage)
+async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    await ctx.send(
+        sender,
+        ChatAcknowledgement(timestamp=datetime.now(), acknowledged_msg_id=msg.msg_id),
+    )
+    text = ''
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            text += item.text
+    
+    # Read verification count from contract
+    verification_count = 0
     try:
-        ctx.logger.info(f"Processing verification request #{request_id}")
-        
-        # Get verification request details from blockchain
-        verification_req = factory_contract.functions.verificationRequests(request_id).call()
-        verification_uri = verification_req[1]
-        is_processed = verification_req[2]
-        
-        if is_processed:
-            ctx.logger.warning(f"Verification request #{request_id} already processed. Skipping.")
-            return
-        
-        ctx.logger.info(f"Verification URI: {verification_uri}")
-        
-        # Get embedding for the verification image
-        ctx.logger.info("Generating embedding for verification image...")
-        verification_embedding = get_embeddings(verification_uri)
-        ctx.logger.info("✓ Embedding generated")
-        
-        # Search Qdrant for similar NFTs
-        ctx.logger.info("Searching for matching NFTs...")
-        search_results = search_points(verification_embedding, limit=5)
-        
-        if not search_results or len(search_results) == 0:
-            ctx.logger.warning("No matching NFTs found. Responding with NOT_VERIFIED")
-            verification_result = VerificationResult.NOT_VERIFIED
-            matched_token_id = 0
-        else:
-            # Get the best match
-            best_match = search_results[0]
-            similarity_score = best_match.get("score", 0)
-            matched_token_id = best_match.get("payload", {}).get("tokenId", 0)
-            
-            ctx.logger.info(f"Best match: NFT #{matched_token_id}, Similarity: {similarity_score:.4f}")
-            
-            # Thresholds for verification (you can adjust these)
-            VERIFIED_THRESHOLD = 0.95      # Very high similarity - exact match
-            MODIFIED_THRESHOLD = 0.75      # Medium similarity - likely modified
-            
-            if similarity_score >= VERIFIED_THRESHOLD:
-                verification_result = VerificationResult.VERIFIED
-                ctx.logger.info(f"✓ VERIFIED! Exact match with NFT #{matched_token_id}")
-            elif similarity_score >= MODIFIED_THRESHOLD:
-                verification_result = VerificationResult.MODIFIED
-                ctx.logger.info(f"⚠ MODIFIED! Similar to NFT #{matched_token_id} but with modifications")
-            else:
-                verification_result = VerificationResult.NOT_VERIFIED
-                matched_token_id = 0
-                ctx.logger.info(f"✗ NOT_VERIFIED. Similarity too low.")
-        
-        # Submit verification response to blockchain
-        result_name = ["NONE", "VERIFIED", "MODIFIED", "NOT_VERIFIED"][verification_result]
-        ctx.logger.info(f"Submitting response: result={result_name}, tokenId={matched_token_id}")
-        
-        response_tx = factory_contract.functions.responseVerification(
-            request_id,
-            verification_result,
-            matched_token_id
-        ).build_transaction({
-            'from': AGENT_EVM_ADDRESS,
-            'nonce': w3.eth.get_transaction_count(AGENT_EVM_ADDRESS)
-        })
-        
-        signed_response = agent_account.sign_transaction(response_tx)
-        response_hash = w3.eth.send_raw_transaction(signed_response.rawTransaction)
-        ctx.logger.info(f"Transaction sent: {response_hash.hex()}")
-        
-        response_receipt = w3.eth.wait_for_transaction_receipt(response_hash)
-        
-        if response_receipt['status'] != 1:
-            ctx.logger.error(f"Verification response transaction reverted! TX: {response_hash.hex()}")
-            raise Exception(f"Verification response failed! TX: {response_hash.hex()}")
-        
-        ctx.logger.info(f"✓ Response submitted! TX: {response_hash.hex()}")
-        ctx.logger.info(f"🎉 Verification #{request_id} completed successfully!")
-        
+        agent_info = factory_contract.functions.agents(AGENT_EVM_ADDRESS).call()
+        verification_count = agent_info[2]  # verifiedCount is the 3rd element (index 2)
     except Exception as e:
-        ctx.logger.error(f"Failed to handle verification #{request_id}: {e}")
-        import traceback
-        ctx.logger.error(traceback.format_exc())
+        ctx.logger.error(f"Failed to read verification count: {e}")
+    
+    response = 'I am afraid something went wrong and I am unable to answer your question at the moment'
+    try:
+        r = client.chat.completions.create(
+            model="asi1-mini",
+            messages=[
+                {"role": "system", "content": f"""
+        You are a Realia verification agent - an autonomous AI agent that verifies image authenticity on the blockchain.
+        
+        You have successfully completed {verification_count} verifications so far.
+        
+        Realia is a decentralized protocol that proves whether images are real, AI-generated, or modified using:
+        - CLIP embeddings for image similarity matching
+        - Qdrant vector database for storing NFT embeddings
+        - Blockchain verification on Arbitrum Sepolia
+        - PYUSD for payments and rewards
+        
+        You can answer questions about:
+        - How Realia works
+        - Image verification process
+        - NFT minting for authenticity
+        - Your role as a verification agent
+        - Decentralized AI verification
+        
+        Always start your response by introducing yourself: "I am a Realia agent with {verification_count} verifications completed."
+        
+        If users want to mint or verify images, direct them to: https://realia-protocol.vercel.app/
+        
+        If asked about unrelated topics, politely redirect the conversation to Realia and image authenticity.
+                """},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=2048,
+        )
+        response = str(r.choices[0].message.content)
+    except:
+        ctx.logger.exception('Error querying model')
+    await ctx.send(sender, ChatMessage(
+        timestamp=datetime.utcnow(),
+        msg_id=uuid4(),
+        content=[
+            TextContent(type="text", text=response),
+            EndSessionContent(type="end-session"),
+        ]
+    ))
+
+@protocol.on_message(ChatAcknowledgement)
+async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    pass
+
+agent.include(protocol, publish_manifest=True)

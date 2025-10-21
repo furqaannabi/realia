@@ -38,6 +38,10 @@ const config: HardhatUserConfig = {
           url: "https://sepolia.arbiscan.io",
           apiUrl: "https://api.etherscan.io/v2/api",
         },
+        blockscout: {
+          url: "https://arbitrum-realia.cloud.blockscout.com",
+          apiUrl: "https://arbitrum-realia.cloud.blockscout.com/api",
+        },
       },
     },
   },
@@ -45,7 +49,10 @@ const config: HardhatUserConfig = {
     etherscan: {
       apiKey: ETHERSCAN_API_KEY,
     },
+    blockscout: {
+      enabled: true,
   },
+}
 };
 
 export default config;
