@@ -95,7 +95,7 @@ function QueueSkeleton() {
 }
 // -----------------------------------------------------
 
-const BLOCKSCOUT_BASE_URL = "https://arbitrum-sepolia.blockscout.com"
+const BLOCKSCOUT_BASE_URL = "https://arbitrum-realia.cloud.blockscout.com"
 
 // Keep static network stats, but the pending verifications stat will be updated
 const baseStats = [

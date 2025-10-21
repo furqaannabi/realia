@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { REALIA_ADDRESS } from "../config";
 import { readContract } from "@wagmi/core";
 
-const BLOCKSCOUT_BASE = "https://arbitrum-sepolia.blockscout.com/api";
+const BLOCKSCOUT_BASE = "https://arbitrum-realia.cloud.blockscout.com/api";
 import RealiaFactoryABI from './Realia.json'
 import { config } from "../wallet";
 // Event signature hashes
