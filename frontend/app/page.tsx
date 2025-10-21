@@ -14,11 +14,7 @@ import {
 
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-// ---
-// Realia — Decentralized Image Authenticity Protocol
-// Author: Furqaan Nabi
-// Date: October 2025
-// ---
+
 function MobileNavBar() {
   const [open, setOpen] = useState(false);
 
