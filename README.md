@@ -4,6 +4,8 @@
 
 Realia is a decentralized protocol that verifies whether an image is real, AI-generated, or modified. It provides on-chain proofs of authenticity linked to NFTs using hybrid on-chain and off-chain computation.
 
+> **🌐 Try it now: [https://realia-protocol.vercel.app/](https://realia-protocol.vercel.app/)**
+
 Built for **ETHOnline 2025** integrating:
 - 💵 **PYUSD** for payments, staking, and rewards
 - 🔍 **Blockscout** for blockchain data indexing and verification dashboards
@@ -291,7 +293,7 @@ EMBEDDING_URL=http://localhost:8000
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Blockchain** | Arbitrum Sepolia | Smart contract deployment |
+| **Blockchain** | Arbitrum Sepolia | Smart contract deployment | Blockscout Autoscout |
 | **Smart Contracts** | Solidity + Hardhat + OpenZeppelin | NFT minting & verification logic |
 | **Payments** | PYUSD (ERC-20) | Staking, fees, rewards |
 | **Frontend** | Next.js + TypeScript + Wagmi + RainbowKit | User interface |
@@ -317,7 +319,7 @@ Main protocol contract handling:
 - PYUSD reward distribution
 - Agent slashing for dishonest behavior
 
-**Deployed Address**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-sepolia.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
+**Deployed Address**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-realia.cloud.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
 
 ### RealiaNFT.sol
 ERC-721 NFT contract for:
@@ -325,7 +327,7 @@ ERC-721 NFT contract for:
 - Storing token URIs
 - Token ownership and transfers
 
-**Deployed Address**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-sepolia.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
+**Deployed Address**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-realia.cloud.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
 
 ---
 
@@ -391,13 +393,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+### Live Application
+- **Realia Web App**: [https://realia-protocol.vercel.app/](https://realia-protocol.vercel.app/) - Mint & Verify Images
+
 ### Deployed Contracts
-- **RealiaFactory**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-sepolia.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
-- **RealiaNFT**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-sepolia.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
-- **PYUSD**: [`0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1`](https://arbitrum-sepolia.blockscout.com/address/0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1)
+- **RealiaFactory**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-realia.cloud.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
+- **RealiaNFT**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-realia.cloud.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
+- **PYUSD**: [`0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1`](https://arbitrum-realia.cloud.blockscout.com/address/0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1)
 
 ### Resources
-- **Blockscout Explorer**: [Arbitrum Sepolia Blockscout](https://arbitrum-sepolia.blockscout.com/)
+- **Blockscout Explorer**: [Arbitrum Sepolia Blockscout](https://arbitrum-realia.cloud.blockscout.com/)
 - **Fetch.ai**: [agentverse.ai](https://agentverse.ai/)
 - **Qdrant**: [qdrant.tech](https://qdrant.tech/)
 

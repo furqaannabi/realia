@@ -2,12 +2,16 @@
 
 AI agent for the Realia NFT verification platform.
 
+> **🌐 Want to mint or verify images? Visit [https://realia-protocol.vercel.app/](https://realia-protocol.vercel.app/)**  
+> **📄 For Agentverse deployment documentation, see [`agent.md`](./agent.md)**
+
 ## Features
 
 - 🔍 **Real-time Mint Listening** - Detects new NFT mints and creates embeddings immediately
 - ✅ **Verification Processing** - Handles verification requests from the blockchain
 - 🔄 **Background Sync** - Periodically syncs all NFTs to ensure no embeddings are missed
 - 🤖 **Auto-Registration** - Automatically registers agent on blockchain if not already registered
+- 💬 **Chat Interface** - Responds to messages with verification count and Realia information
 
 ## Environment Variables
 
@@ -16,8 +20,8 @@ Create a `.env` file in the `agent` directory with the following variables:
 ```env
 # Blockchain Configuration
 ALCHEMY_API_KEY=your_alchemy_api_key
-REALIA_FACTORY_CONTRACT_ADDRESS=0x...  # RealiaFactory contract address
-REALIA_NFT_CONTRACT_ADDRESS=0x...      # RealiaNFT contract address
+REALIA_FACTORY_CONTRACT_ADDRESS=0x16db8E9910937D2D137E3d1381f833202A0CC5A4
+REALIA_NFT_CONTRACT_ADDRESS=0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F
 AGENT_PRIVATE_KEY=0x...  # Private key for agent wallet (needs PYUSD for staking)
 
 # Agent Configuration
@@ -29,6 +33,9 @@ QDRANT_BASE_URL=https://your-qdrant-instance.io
 
 # Embedding Service
 EMBEDDING_URL=https://your-embedding-service.com
+
+# Chat AI (Optional)
+ASI_ONE_API_KEY=your_asi_api_key  # For chat functionality
 ```
 
 ## Requirements

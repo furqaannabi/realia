@@ -39,8 +39,8 @@ const config: HardhatUserConfig = {
           apiUrl: "https://api.etherscan.io/v2/api",
         },
         blockscout: {
-          url: "https://arbitrum-sepolia.blockscout.com",
-          apiUrl: "https://arbitrum-sepolia.blockscout.com/api",
+          url: "https://arbitrum-realia.cloud.blockscout.com",
+          apiUrl: "https://arbitrum-realia.cloud.blockscout.com/api",
         },
       },
     },

@@ -1,9 +1,20 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import asyncio, os, requests, json, base64
+import os, requests, json, base64
 from web3 import Web3
-from uagents import Agent, Context
+from uagents import Context, Protocol, Agent
+from uagents_core.contrib.protocols.chat import (
+    ChatAcknowledgement,
+    ChatMessage,
+    EndSessionContent,
+    TextContent,
+    chat_protocol_spec,
+)
+from openai import OpenAI
+from datetime import datetime
+from uuid import uuid4
+
 
 # ============================================================================
 # ABI Definitions
@@ -133,6 +144,7 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_BASE_URL = os.getenv("QDRANT_BASE_URL")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL")
 WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
 
 w3 = Web3(Web3.HTTPProvider(f"https://arb-sepolia.g.alchemy.com/v2/{ALCHEMY_API_KEY}"))
 factory_contract = w3.eth.contract(address=FACTORY_ADDRESS, abi=REALIA_FACTORY_ABI)
@@ -144,6 +156,13 @@ AGENT_EVM_ADDRESS = agent_account.address
 
 # --- Agent Setup ---
 agent = Agent(name="realia_agent", seed=WALLET_SEED, port=8001)
+subject_matter = "the sun"
+client = OpenAI(
+    base_url='https://api.asi1.ai/v1',
+    api_key=ASI_ONE_API_KEY,
+)
+
+protocol = Protocol(spec=chat_protocol_spec)
 
 async def check_and_register_agent(ctx: Context):
     """Check if agent is registered, if not attempt to register"""
@@ -406,3 +425,74 @@ async def start(ctx: Context):
     ctx.logger.info(f"QDRANT collection: {qdrant_result}")
     
     ctx.logger.info("🚀 All services running!")
+
+
+@protocol.on_message(ChatMessage)
+async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    await ctx.send(
+        sender,
+        ChatAcknowledgement(timestamp=datetime.now(), acknowledged_msg_id=msg.msg_id),
+    )
+    text = ''
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            text += item.text
+    
+    # Read verification count from contract
+    verification_count = 0
+    try:
+        agent_info = factory_contract.functions.agents(AGENT_EVM_ADDRESS).call()
+        verification_count = agent_info[2]  # verifiedCount is the 3rd element (index 2)
+    except Exception as e:
+        ctx.logger.error(f"Failed to read verification count: {e}")
+    
+    response = 'I am afraid something went wrong and I am unable to answer your question at the moment'
+    try:
+        r = client.chat.completions.create(
+            model="asi1-mini",
+            messages=[
+                {"role": "system", "content": f"""
+        You are a Realia verification agent - an autonomous AI agent that verifies image authenticity on the blockchain.
+        
+        You have successfully completed {verification_count} verifications so far.
+        
+        Realia is a decentralized protocol that proves whether images are real, AI-generated, or modified using:
+        - CLIP embeddings for image similarity matching
+        - Qdrant vector database for storing NFT embeddings
+        - Blockchain verification on Arbitrum Sepolia
+        - PYUSD for payments and rewards
+        
+        You can answer questions about:
+        - How Realia works
+        - Image verification process
+        - NFT minting for authenticity
+        - Your role as a verification agent
+        - Decentralized AI verification
+        
+        Always start your response by introducing yourself: "I am a Realia agent with {verification_count} verifications completed."
+        
+        If users want to mint or verify images, direct them to: https://realia-protocol.vercel.app/
+        
+        If asked about unrelated topics, politely redirect the conversation to Realia and image authenticity.
+                """},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=2048,
+        )
+        response = str(r.choices[0].message.content)
+    except:
+        ctx.logger.exception('Error querying model')
+    await ctx.send(sender, ChatMessage(
+        timestamp=datetime.utcnow(),
+        msg_id=uuid4(),
+        content=[
+            TextContent(type="text", text=response),
+            EndSessionContent(type="end-session"),
+        ]
+    ))
+
+@protocol.on_message(ChatAcknowledgement)
+async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    pass
+
+agent.include(protocol, publish_manifest=True)
