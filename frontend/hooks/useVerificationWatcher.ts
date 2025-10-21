@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { ethers } from "ethers";
-import { REALIA_ADDRESS } from "@/app/utils/config";
-import RealiaABI from "@/app/utils/web3/Realia.json";
-import { readContract, } from "@wagmi/core";
-import { config } from "@/app/utils/wallet";
+
+// Dynamically import to avoid circular imports in Next.js projects
+let getResponseByAgent: any;
+try {
+  // @ts-ignore
+  getResponseByAgent = require("@/app/utils/web3/blockscout").getResponseByAgent;
+} catch(e) {}
 
 export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval = 1000) {
+  const [response, setResponse] = useState<any[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,11 +19,12 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
 
   const startWatcher = useCallback(async (verificationId: string | number) => {
     if (!verificationId) return;
-
+    console.log("Watcher Started for ID :", verificationId)
     setLoading(true);
     setIsVerified(false);
     setError(null);
     setAttemptCount(0);
+    setResponse([])
 
     const startTime = Date.now();
 
@@ -29,35 +33,45 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
         if (Date.now() - startTime > timeoutMs) {
           clearInterval(pollRef.current!);
           setLoading(false);
-          setError("Verification timed out, no events found.");
+          setError("Verification timed out, no agent response.");
           toast.error("⏱ Verification timed out, please try again.");
           return;
         }
 
-        // Read the VerificationRequest directly from the smart contract
-        const vr: any = await readContract(config, {
-          address: REALIA_ADDRESS,
-          abi: RealiaABI.abi,
-          functionName: "verificationRequests",
-          args: [verificationId],
-        });
-
-        setAttemptCount((prev) => prev + 1); // triggers useEffect
-
-        console.log(vr)
-        // Check if request is finalized (depends on your struct)
-        if (vr?.finalized) {
-          clearInterval(pollRef.current!);
-          setIsVerified(true);
+        // Use getResponseByAgent(requestId) to fetch off-chain responses
+        if (!getResponseByAgent) {
+          setError("Watcher not available");
           setLoading(false);
-          toast.success("✅ Verification finalized on-chain!");
-          console.log("VerificationRequest:", vr);
+          clearInterval(pollRef.current!);
           return;
         }
-        // else keep polling
+
+        const res = await getResponseByAgent(verificationId);
+
+        console.log("Response By agent",res)
+        setAttemptCount((prev) => prev + 1);
+
+        if (res && Array.isArray(res) && res.length > 0) {
+          setResponse(res);
+          clearInterval(pollRef.current!);
+          setLoading(false);
+
+          // If any agent has verified=true, consider as verified.
+          const anyVerified = res.some((r: any) => r.verified);
+          setIsVerified(anyVerified);
+
+          if (anyVerified) {
+            toast.success("✅ Verification finalized by agent(s)!");
+          } else {
+            toast.info("⏳ Verification agent(s) responded, but not verified yet.");
+          }
+
+          return;
+        }
+        // keep polling otherwise
       } catch (err) {
-        console.error("Error reading verificationRequest:", err);
-        setError("Error reading verification request");
+        console.error("Error querying agent response:", err);
+        setError("Error querying agent response");
         setLoading(false);
         clearInterval(pollRef.current!);
       }
@@ -71,5 +85,5 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
     };
   }, []);
 
-  return { isVerified, loading, error, attemptCount, startWatcher };
+  return { isVerified, loading, error, attemptCount, response, startWatcher };
 }

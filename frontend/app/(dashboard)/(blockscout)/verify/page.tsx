@@ -6,23 +6,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { UploadCloud, ImageIcon, CheckCircle2, Loader2, AlertTriangle, RefreshCcw } from "lucide-react"
+import { UploadCloud, ImageIcon, CheckCircle2, Loader2, AlertTriangle, RefreshCcw, Check, X } from "lucide-react"
 import { toast } from "sonner"
-import { api } from "../../utils/axiosInstance"
+import { api } from "../../../utils/axiosInstance"
 import { useAccount, useWriteContract } from "wagmi"
-import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../utils/config"
+import { PYUSD_ADDRESS, REALIA_ADDRESS } from "../../../utils/config"
 import RealiaABI from "@/app/utils/web3/Realia.json"
 import ERC20ABI from "@/app/utils/web3/ERC20.json"
 import { parseUnits } from "viem"
 import { readContract, simulateContract, writeContract } from "@wagmi/core"
-import { config } from "../../utils/wallet"
-import { AnimatePresence } from "framer-motion"
+import { config } from "../../../utils/wallet"
+import { AnimatePresence, motion } from "framer-motion"
 import { ethers } from 'ethers'
 import { useVerificationWatcher } from "@/hooks/useVerificationWatcher"
+import { useTransactionPopup, useNotification } from "@blockscout/app-sdk";
+import { getResponseByAgent } from "@/app/utils/web3/blockscout"
+import { useLeaderboardAgents } from "@/app/(dashboard)/leaderboard/page" // <-- Import Leaderboard hook
+
 type ImgDims = { width: number; height: number }
+
+// REMOVE THIS LINE: const TOTAL_AGENTS_EXPECTED = 3
 
 const VERIFY_PRICE = "5";
 const ORDER_TYPE_VERIFY = 2;
+
+// Utility: convert chain id for blockscout useTxToast & related hooks
+function mapBlockscoutChainId(chainId: number | string): string {
+    if (chainId === 421614 || chainId === "421614") return "1500";
+    return String(chainId);
+}
 
 function formatBytes(bytes: number) {
     if (bytes === 0) return "0 B"
@@ -54,7 +66,7 @@ const loaderSteps: { key: string; label: string }[] = [
     { key: "approve", label: "Approving tokens..." },
     { key: "order", label: "Placing order on-chain..." },
     { key: "api", label: "Finalizing with backend..." },
-    { key: "watcher", label: "Waiting for on-chain confirmation..." },
+    { key: "watcher", label: "Waiting for agent(s) response..." },
 ]
 
 function getActiveLoaderStepExtended({
@@ -72,6 +84,76 @@ function getActiveLoaderStepExtended({
     return -1
 }
 
+// Format address for display
+function formatShortAddress(addr?: string) {
+    if (!addr || typeof addr !== "string") return ""
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+// Agent response table/displays
+function AgentResponsesTable({ responses, totalAgents }: { responses: any[], totalAgents: number }) {
+    // Map agent-addresses for those responded, and count remaining
+    const respondedAgents = responses.map(r => r.agent?.toLowerCase())
+    const remainingCount = Math.max(0, totalAgents - responses.length)
+    // Optionally: could support showing a placeholder for those not yet responded
+
+    return (
+        <div className="mt-5 w-full">
+            <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-zinc-50">Agent Responses</span>
+                <Badge
+                    className="bg-zinc-700/30 border-zinc-400/20 text-xs text-white ml-2"
+                >
+                    {`${responses.length} / ${totalAgents} responded`}
+                </Badge>
+                {remainingCount > 0 && (
+                    <span className="text-zinc-400 text-xs ml-2">{remainingCount} agent{remainingCount > 1 ? "s" : ""} remaining...</span>
+                )}
+            </div>
+            <div className="overflow-x-auto">
+                <table className="min-w-full rounded-xl bg-black/30 border border-zinc-700/20 text-xs shadow">
+                    <thead>
+                        <tr className="bg-zinc-800/70 text-zinc-200 uppercase text-xs">
+                            <th className="py-2 px-2 border-b border-zinc-700 font-semibold">Agent</th>
+                            <th className="py-2 px-2 border-b border-zinc-700 font-semibold">Block</th>
+                            <th className="py-2 px-2 border-b border-zinc-700 font-semibold">Tx Hash</th>
+                            <th className="py-2 px-2 border-b border-zinc-700 font-semibold">Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {responses.length === 0 ? (
+                            <tr>
+                                <td colSpan={4} className="text-center text-zinc-400 py-5">No agent responses yet.</td>
+                            </tr>
+                        ) : (
+                            responses.map((r, i) => (
+                                <tr key={r.agent + "-" + r.blockNumber + "-" + i} className="hover:bg-zinc-900/40 border-b border-zinc-700/15">
+                                    <td className="py-2 px-2 font-mono">{formatShortAddress(r.agent)}</td>
+                                    <td className="py-2 px-2">{r.blockNumber}</td>
+                                    <td className="py-2 px-2 font-mono">
+                                        {r.txHash ?
+                                            <a href={`https://arbitrum-sepolia.blockscout.com/tx/${r.txHash}`} className="underline text-blue-300" target="_blank" rel="noopener noreferrer">
+                                                {`${r.txHash.slice(0, 10)}...${r.txHash.slice(-5)}`}
+                                            </a> : "--"}
+                                    </td>
+                                    <td className="py-2 px-2">
+                                        {r.verified === true
+                                            ? <span className="inline-flex items-center gap-1 bg-green-700/10 px-2 py-0.5 rounded font-semibold text-green-300"><Check className="h-4 w-4" />Verified</span>
+                                            : r.verified === false
+                                                ? <span className="inline-flex items-center gap-1 bg-red-700/10 px-2 py-0.5 rounded font-semibold text-red-300"><X className="h-4 w-4" />Rejected</span>
+                                                : <span className="inline-flex items-center gap-1 bg-yellow-700/10 px-2 py-0.5 rounded font-semibold text-yellow-200"><Loader2 className="h-4 w-4 animate-spin" />Pending</span>
+                                        }
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
 export default function VerifyPage() {
     const [file, setFile] = React.useState<File | null>(null)
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
@@ -85,23 +167,34 @@ export default function VerifyPage() {
     const [loadingApi, setLoadingApi] = React.useState(false)
 
     const [verificationId, setVerificationId] = React.useState<string | null>(null)
-    const { isVerified, loading: watcherLoading, error: watcherError, startWatcher } = useVerificationWatcher()
+    const { isVerified, loading: watcherLoading, error: watcherError, startWatcher, response } = useVerificationWatcher()
     const [watcherActive, setWatcherActive] = React.useState(false)
 
+    // Use leaderboard agents for correct count
+    const { agentsCount } = useLeaderboardAgents()
+
+    // Blockscout app-sdk TransactionPopup
+    const { openTxToast } = useNotification();
+
+    // (for dev debug)
     React.useEffect(() => {
-        api.get('/verifications').then((res) => console.log("Verification", res)).catch((e) => {
-            console.log(e)
-        })
+        const getAgentResponse = async () => {
+            // console.log(await getResponseByAgent(1))
+        }
+        // api.get('/verifications').then((res) => console.log("Verification", res)).catch((e) => {
+        //     console.log(e)
+        // })
+        // getAgentResponse()
     }, [])
     React.useEffect(() => {
-        console.log(isVerified, watcherLoading, watcherError)
-    }, [isVerified, watcherLoading, watcherError])
+        // console.log("debug", isVerified, watcherLoading, watcherError, response)
+    }, [isVerified, watcherLoading, watcherError, response])
 
     const [loaderMessages, setLoaderMessages] = React.useState<
         { step: number, type: "loading" | "done", message: string }[]
     >([])
 
-    const { address } = useAccount()
+    const { address, chain } = useAccount()
     const { writeContractAsync: writeApprove } = useWriteContract()
 
     // Helper: check if current allowance is sufficient
@@ -144,12 +237,18 @@ export default function VerifyPage() {
     const handleApprove = async () => {
         setLoadingApprove(true)
         try {
-            await writeApprove({
+            const txHash = await writeApprove({
                 address: PYUSD_ADDRESS,
                 abi: ERC20ABI,
                 functionName: "approve",
                 args: [REALIA_ADDRESS, parseUnits(VERIFY_PRICE, 4)],
             })
+            if (txHash && chain?.id && address) {
+                openTxToast(
+                    mapBlockscoutChainId(chain.id),
+                    txHash,
+                );
+            }
         } catch (err) {
             console.error("Approve failed:", err)
             throw err
@@ -168,7 +267,13 @@ export default function VerifyPage() {
                 args: [ORDER_TYPE_VERIFY],
                 account: address,
             })
-            await writeContract(config, request)
+            const txHash = await writeContract(config, request)
+            if (txHash && chain?.id && address) {
+                openTxToast(
+                    mapBlockscoutChainId(chain.id),
+                    txHash,
+                );
+            }
         } catch (err) {
             console.error("Order create failed:", err)
             throw err
@@ -196,7 +301,6 @@ export default function VerifyPage() {
             setVerificationError("Failed waiting for on-chain confirmation" + (watcherError ? `: ${watcherError}` : ""))
             setWatcherActive(false)
         }
-        // eslint-disable-next-line
     }, [watcherLoading, isVerified, watcherError])
 
     const [lastLoaderStep, setLastLoaderStep] = React.useState(-1)
@@ -378,7 +482,7 @@ export default function VerifyPage() {
         try {
             const d = await getImageDimensions(f)
             setDims(d)
-        } catch {}
+        } catch { }
     }
 
     const onDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
@@ -418,21 +522,21 @@ export default function VerifyPage() {
     } else if (verifying) {
         loaderMessage = "Verifying..."
     } else if (watcherActive) {
-        loaderMessage = "Waiting for on-chain confirmation..."
+        loaderMessage = "Waiting for agent(s) response..."
     }
 
     function ChatLoaderPipeline() {
+        // Only show spinner/step text now, TransactionPopup is managed by blockscout sdk
         return (
             <div className="w-full flex flex-col items-start gap-2 pb-2 text-sm">
                 <AnimatePresence mode="wait">
-                {loaderMessages.map((msg, i) => (
+                    {loaderMessages.map((msg, i) => (
                         <span
                             key={msg.step}
-                            className={`rounded-full px-3 py-1 mb-0.5 shadow ${
-                                msg.type === "done"
-                                    ? "bg-black text-white font-bold border border-white/10"
-                                    : "bg-zinc-900/80 text-zinc-300"
-                            }`}
+                            className={`rounded-full px-3 py-1 mb-0.5 shadow ${msg.type === "done"
+                                ? "bg-black text-white font-bold border border-white/10"
+                                : "bg-zinc-900/80 text-zinc-300"
+                                }`}
                         >
                             {msg.type === "done"
                                 ? msg.message.replace("...", " ✓")
@@ -623,71 +727,72 @@ export default function VerifyPage() {
                             </div>
                         )}
                         <AnimatePresence>
-                        {file && overallLoading && (
-                            <div
-                                className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
-                            >
-                                <ChatLoaderPipeline />
-                                <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
-                                        style={{ width: `${stepProgressPercent}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        </AnimatePresence>
-                        <AnimatePresence>
-                        {file && !overallLoading && verificationError && (
-                            <ErrorDisplay err={verificationError} retry={onVerify} disabled={overallLoading} />
-                        )}
-                        </AnimatePresence>
-                        <AnimatePresence>
-                        {file && !overallLoading && !verificationError && verified && (
-                            <div
-                            >
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div
-                                      className="flex items-center gap-2"
-                                    >
-                                        <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
-                                            <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
-                                            Complete
-                                        </Badge>
-                                        {dims && (
-                                            <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
-                                        )}
+                            {file && overallLoading && (
+                                <div
+                                    className="flex flex-col items-start justify-start min-h-[260px] w-full px-0 sm:px-6"
+                                >
+                                    <ChatLoaderPipeline />
+                                    <div className="mt-4 w-full h-1 rounded-full bg-zinc-900 overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-white via-zinc-200 to-zinc-400"
+                                            style={{ width: `${stepProgressPercent}%` }}
+                                        />
+                                    </div>
+                                    {/* Agent status table while loading */}
+                                    <div className="w-full mt-8">
+                                        <AgentResponsesTable
+                                            responses={Array.isArray(response) ? response : []}
+                                            totalAgents={agentsCount}
+                                        />
                                     </div>
                                 </div>
-                                <Separator className="my-4 bg-white/10" />
-                                <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                        <div>
-                                            <div className="text-xs uppercase tracking-wide text-zinc-400">Result</div>
-                                            <div className="mt-1 text-2xl font-bold flex items-end text-white">
-                                                <span>Verified on-chain</span>
+                            )}
+                        </AnimatePresence>
+                        <AnimatePresence>
+                            {file && !overallLoading && verificationError && (
+                                <ErrorDisplay err={verificationError} retry={onVerify} disabled={overallLoading} />
+                            )}
+                        </AnimatePresence>
+                        <AnimatePresence>
+                            {file && !overallLoading && !verificationError && verified && (
+                                <div>
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div
+                                            className="flex items-center gap-2"
+                                        >
+                                            <Badge variant="default" className="rounded-lg px-2 py-1 bg-black/80 text-white font-bold flex items-center gap-1 border border-white/10 shadow">
+                                                <CheckCircle2 className="inline-block h-4 w-4 mr-1 text-white/80" />
+                                                Complete
+                                            </Badge>
+                                            {dims && (
+                                                <Badge variant="outline" className="rounded-lg px-2 py-1 border-white/15 text-white/80">{dims.width}×{dims.height}px</Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Separator className="my-4 bg-white/10" />
+                                    <div className="mb-4 rounded-xl border-2 border-white/10 bg-black/30 p-5 shadow">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-zinc-400">Result</div>
+                                                <div className="mt-1 text-2xl font-bold flex items-end text-white">
+                                                    <span>Verified on-chain</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+                                    {/* --- Display agent AI responses on success too --- */}
+                                    {(Array.isArray(response) && response.length > 0) && (
+                                        <div className="my-6">
+                                            <AgentResponsesTable
+                                                responses={response}
+                                                totalAgents={agentsCount}
+                                            />
+                                        </div>
+                                    )}
+
+                                    
                                 </div>
-
-                                <dl
-                                    className="grid grid-cols-3 gap-4 text-sm"
-                                >
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">File name</dt>
-                                    <dd className="col-span-2 truncate">{file.name}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">MIME type</dt>
-                                    <dd className="col-span-2">{file.type || "image"}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">Size</dt>
-                                    <dd className="col-span-2">{formatBytes(file.size)}</dd>
-
-                                    <dt className="col-span-1 text-zinc-400 font-semibold">Dimensions</dt>
-                                    <dd className="col-span-2">{dims ? `${dims.width} × ${dims.height}` : verified ? "Unknown" : "—"}</dd>
-                                </dl>
-                            </div>
-                        )}
+                            )}
                         </AnimatePresence>
                     </CardContent>
                 </Card>
@@ -696,7 +801,4 @@ export default function VerifyPage() {
     )
 }
 
-/*
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(16px);} to { opacity: 1; transform: none; } }
-.animate-spin-slow { animation: spin 1.4s linear infinite;}
-*/
+
