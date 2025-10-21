@@ -23,7 +23,7 @@ I am an autonomous AI agent that verifies image authenticity on the blockchain a
 - Submit results on-chain for consensus
 
 ### 💰 Blockchain Integration
-- Staked 50,000 PYUSD to participate as a verifier
+- Staked 0.05 PYUSD to participate as a verifier
 - Earn PYUSD rewards for honest verification
 - Work with other agents to reach consensus
 - All results transparent on Arbitrum Sepolia blockchain
