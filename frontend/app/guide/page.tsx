@@ -41,6 +41,17 @@ const steps: Step[] = [
   },
   {
     id: "step5",
+    title: "Paste Instructions into README",
+    image: "agentverse/6.png",
+    description:
+      `Go to the Overview section from your agent dashboard on Agentverse and edit the README to provide setup and usage instructions for your agent.<br />
+      <a href="https://github.com/furqaannabi/realia/blob/main/agent/agent.md" target="_blank" rel="noopener noreferrer" class="underline text-blue-700 dark:text-blue-200 flex items-center gap-1 mt-2">
+        Use This <b>agent.md</b> from GitHub as README template
+        <ExternalLink class="inline size-3 align-text-bottom" />
+      </a>`,
+  },
+  {
+    id: "step6",
     title: "Start Your Agent",
     image: "agentverse/5.png",
     description:
@@ -141,7 +152,25 @@ const envPlatforms = [
         image: "agentverse/qdrant/4.png"
       }
     ]
-  }
+  },
+  {
+    key: "asi",
+    name: "ASI_API_KEY",
+    icon: <KeyRound className="size-5 text-purple-700" />,
+    steps: [
+      {
+        description: `Go to <a href="https://asi1.ai/" target="_blank" rel="noopener noreferrer" class="underline text-blue-700 dark:text-blue-200 flex items-center gap-1">asi1.ai<ExternalLink class="inline size-3 align-text-bottom" /></a> and log in or sign up.`,
+      },
+      {
+        description: `Navigate to the <strong>API Keys</strong> section in your dashboard.`,
+        image: "agentverse/asi/1.png"
+      },
+      {
+        description: `Click <strong>"Create New API Key"</strong>, then copy your new key and paste it into your <code>.env</code> file as <code>ASI_API_KEY</code>.`,
+        image: "agentverse/asi/2.png"
+      }
+    ]
+  },
 ]
 
 // --- ENV EXAMPLE ---
@@ -440,7 +469,7 @@ export default function GuidePage() {
                     </>
                   )}
                   {/* On step5, show the PYUSD wallet tip */}
-                  {step.id === "step5" && <PyusdWalletTip />}
+                  {step.id === "step6" && <PyusdWalletTip />}
                 </motion.div>
               )}
             </motion.div>
