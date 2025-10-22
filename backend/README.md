@@ -6,6 +6,7 @@ Backend API server for the Realia platform, deployed on AWS EC2.
 
 The backend handles:
 - Image upload and storage (IPFS/S3)
+- AI detection using **aiornot API** (third-party provider) during mint
 - NFT minting via smart contracts
 - Verification request management
 - Database operations (PostgreSQL + Prisma)
@@ -19,6 +20,7 @@ The backend handles:
 - **PostgreSQL** - Database
 - **ethers.js** - Ethereum interactions
 - **Alchemy** - RPC provider
+- **aiornot API** - AI image detection (third-party provider)
 - **AWS S3** - Image storage
 - **IPFS/Pinata** - Decentralized storage
 - **dotenv** - Environment variable management
