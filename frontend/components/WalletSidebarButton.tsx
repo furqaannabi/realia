@@ -83,7 +83,6 @@ export function WalletSidebarButton() {
         if (isConnected) {
           login()
         }
-        toast.error(error?.response?.data?.error)
       }
     }
     setUser()
