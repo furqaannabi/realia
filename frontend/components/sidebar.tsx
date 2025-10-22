@@ -7,6 +7,7 @@ import { Home, ImageIcon, Wallet, ChevronLeft, ChevronRight, Lock, Trophy, Menu,
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { WalletSidebarButton } from './WalletSidebarButton';
+import Image from 'next/image';
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -171,8 +172,15 @@ export function Sidebar() {
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-1 select-none flex items-center gap-2"
                 >
-                  <span className="flex items-center justify-center rounded-md bg-white/5 w-6 h-6 shadow-sm">
-                    <ImageIcon className="w-4 h-4 text-white/80" />
+                  <span className="flex items-center justify-center rounded-md bg-white/5 w-7 h-7 shadow-sm">
+                    <Image
+                      src="/Realia.png"
+                      alt="Realia Logo"
+                      width={28}
+                      height={18}
+                      className="w-7 h-7"
+                      priority
+                    />
                   </span>
                   <span className="text-[15px] font-bold text-white block tracking-tight">
                     Realia

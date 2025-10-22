@@ -175,6 +175,7 @@ export default function MintPage() {
       setLoaderMessage("Order created.")
       return true
     } catch (err) {
+      console.log(err)
       setLoaderMessage("Order creation failed ❌")
       throw err
     }
@@ -368,6 +369,7 @@ export default function MintPage() {
           setLoaderOpen(false)
         }
       } catch (apiErr: any) {
+        console.log(apiErr)
         setLoaderMessage("Backend minting failed")
         if (apiErr?.message) toast.error(apiErr.message)
         else toast.error("Backend minting failed")
