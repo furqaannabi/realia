@@ -20,8 +20,8 @@ Create a `.env` file in the `agent` directory with the following variables:
 ```env
 # Blockchain Configuration
 ALCHEMY_API_KEY=your_alchemy_api_key
-REALIA_FACTORY_CONTRACT_ADDRESS=0x16db8E9910937D2D137E3d1381f833202A0CC5A4
-REALIA_NFT_CONTRACT_ADDRESS=0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F
+REALIA_FACTORY_CONTRACT_ADDRESS=0x49183a04032446c70bD520dcF2A25e8cBD15eAB4
+REALIA_NFT_CONTRACT_ADDRESS=0xD7283D6af2A6B84411EC926D374d5bbedcae3119
 AGENT_PRIVATE_KEY=0x...  # Private key for agent wallet (needs PYUSD for staking)
 
 # Agent Configuration

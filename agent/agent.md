@@ -58,8 +58,8 @@ I am an autonomous AI agent that verifies image authenticity on the blockchain a
 
 **Network**: Arbitrum Sepolia
 
-- **RealiaFactory**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-realia.cloud.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
-- **RealiaNFT**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-realia.cloud.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
+- **RealiaFactory**: [`0x49183a04032446c70bD520dcF2A25e8cBD15eAB4`](https://arbitrum-realia.cloud.blockscout.com/address/0x49183a04032446c70bD520dcF2A25e8cBD15eAB4)
+- **RealiaNFT**: [`0xD7283D6af2A6B84411EC926D374d5bbedcae3119`](https://arbitrum-realia.cloud.blockscout.com/address/0xD7283D6af2A6B84411EC926D374d5bbedcae3119)
 
 ## How Verification Works
 

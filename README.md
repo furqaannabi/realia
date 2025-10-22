@@ -173,10 +173,9 @@ Embedding service runs on `http://localhost:8000` (or EC2 endpoint in production
 cd agent
 pip install -r pyproject.toml
 
-# Create .env file
-cp .env.example .env
-# Fill in: ALCHEMY_API_KEY, REALIA_FACTORY_CONTRACT_ADDRESS, 
-#          REALIA_NFT_CONTRACT_ADDRESS, AGENT_PRIVATE_KEY, etc.
+# Setup environment (see Environment Setup section)
+cp .env.sample .env
+# Update .env with your configuration
 
 # Run locally for testing
 python agent_local.py
@@ -192,34 +191,32 @@ python agent_local.py
 
 ---
 
-## 🔧 Environment Variables
+## 🔧 Environment Setup
+
+Each component requires environment variables. Use the provided `.env.sample` files as templates:
 
 ### Frontend
-```env
-NEXT_PUBLIC_REALIA_FACTORY_ADDRESS=0x16db8E9910937D2D137E3d1381f833202A0CC5A4
-NEXT_PUBLIC_REALIA_NFT_ADDRESS=0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
+```bash
+cd frontend
+cp .env.sample .env
+# Update the .env file with your configuration
 ```
 
 ### Backend
-```env
-DATABASE_URL=postgresql://...
-REALIA_FACTORY_ADDRESS=0x16db8E9910937D2D137E3d1381f833202A0CC5A4
-REALIA_NFT_ADDRESS=0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F
-ALCHEMY_API_KEY=...
+```bash
+cd backend
+cp .env.sample .env
+# Update the .env file with your configuration
 ```
 
 ### Agent
-```env
-ALCHEMY_API_KEY=...
-REALIA_FACTORY_CONTRACT_ADDRESS=0x16db8E9910937D2D137E3d1381f833202A0CC5A4
-REALIA_NFT_CONTRACT_ADDRESS=0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F
-AGENT_PRIVATE_KEY=0x...
-SEED=your_agent_seed
-QDRANT_API_KEY=...
-QDRANT_BASE_URL=https://...
-EMBEDDING_URL=http://localhost:8000
+```bash
+cd agent
+cp .env.sample .env
+# Update the .env file with your configuration
 ```
+
+**Note**: The embeddings service does not require environment variables.
 
 ---
 
@@ -335,7 +332,7 @@ Main protocol contract handling:
 - PYUSD reward distribution
 - Agent slashing for dishonest behavior
 
-**Deployed Address**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-realia.cloud.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
+**Deployed Address**: [`0x49183a04032446c70bD520dcF2A25e8cBD15eAB4`](https://arbitrum-realia.cloud.blockscout.com/address/0x49183a04032446c70bD520dcF2A25e8cBD15eAB4)
 
 ### RealiaNFT.sol
 ERC-721 NFT contract for:
@@ -343,7 +340,7 @@ ERC-721 NFT contract for:
 - Storing token URIs
 - Token ownership and transfers
 
-**Deployed Address**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-realia.cloud.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
+**Deployed Address**: [`0xD7283D6af2A6B84411EC926D374d5bbedcae3119`](https://arbitrum-realia.cloud.blockscout.com/address/0xD7283D6af2A6B84411EC926D374d5bbedcae3119)
 
 ---
 
@@ -413,8 +410,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Realia Web App**: [https://realia-protocol.vercel.app/](https://realia-protocol.vercel.app/) - Mint & Verify Images
 
 ### Deployed Contracts
-- **RealiaFactory**: [`0x16db8E9910937D2D137E3d1381f833202A0CC5A4`](https://arbitrum-realia.cloud.blockscout.com/address/0x16db8E9910937D2D137E3d1381f833202A0CC5A4)
-- **RealiaNFT**: [`0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F`](https://arbitrum-realia.cloud.blockscout.com/address/0x05C2009C27a6D89dc3a1733B4691A60E5dB33c7F)
+- **RealiaFactory**: [`0x49183a04032446c70bD520dcF2A25e8cBD15eAB4`](https://arbitrum-realia.cloud.blockscout.com/address/0x49183a04032446c70bD520dcF2A25e8cBD15eAB4)
+- **RealiaNFT**: [`0xD7283D6af2A6B84411EC926D374d5bbedcae3119`](https://arbitrum-realia.cloud.blockscout.com/address/0xD7283D6af2A6B84411EC926D374d5bbedcae3119)
 - **PYUSD**: [`0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1`](https://arbitrum-realia.cloud.blockscout.com/address/0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1)
 
 ### Resources
