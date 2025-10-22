@@ -32,7 +32,7 @@ export function WalletSidebarButton() {
   const login = async () => {
     try {
       const nonce = await getNonce(address as `0x${string}`)
-      console.log(nonce)
+
       const signature = await signMessage(config, { message: nonce })
 
       const res = await api.post('/auth/connect', {
@@ -53,7 +53,7 @@ export function WalletSidebarButton() {
   const handleLogout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
-      console.log("logout")
+
     } catch (e) {
       // optional: toast or log error
     }
@@ -77,12 +77,10 @@ export function WalletSidebarButton() {
         const user = await getCurrentUser()
 
         if (user) {
-          console.log("Fetch User", user)
           updateUser(user)
         }
       } catch (error: any) {
         if (isConnected) {
-          console.log("Login")
           login()
         }
         toast.error(error?.response?.data?.error)
@@ -91,9 +89,6 @@ export function WalletSidebarButton() {
     setUser()
   }, [updateUser, isConnected])
 
-  useEffect(() => {
-    console.log(user)
-  }, [user])
 
   // Always apply same background on first render to avoid hydration errors.
   // After mount, swap to connected/disconnected bg if needed.
