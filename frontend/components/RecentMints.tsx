@@ -32,7 +32,7 @@ function RecentMints({ recentMints: initialRecentMints }: { recentMints?: any[] 
         async function fetchNfts() {
             try {
                 const res = await api.get('/nfts')
-                console.log(res)
+
                 // Data shape: { data: { nfts: [...] } }
                 const nfts: any[] = res.data?.nfts || []
 

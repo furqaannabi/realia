@@ -8,9 +8,10 @@ import { Separator } from "@/components/ui/separator"
 import { Loader2, CheckCircle2, TimerIcon, ExternalLink } from "lucide-react"
 import RecentMints from "@/components/RecentMints"
 import { useEffect, useState } from "react"
-import { getPendingVerifications, getVerificationProgress } from "../../utils/web3/blockscout"
+import { getPendingVerifications, getVerificationProgress, getVerificationRequestsCount } from "../../utils/web3/blockscout"
 import { api } from "../../utils/axiosInstance"
 import { toast } from "sonner"
+import { useLeaderboardAgents } from "../leaderboard/page"
 
 // --- Skeleton loader components for dashboard cards ---
 function SkeletonBox({ className = "" }: { className?: string }) {
@@ -97,12 +98,6 @@ function QueueSkeleton() {
 
 const BLOCKSCOUT_BASE_URL = "https://arbitrum-realia.cloud.blockscout.com"
 
-// Keep static network stats, but the pending verifications stat will be updated
-const baseStats = [
-  { label: "Authentic Images", value: "12,438", delta: "+3.1% this week" },
-  { label: "Verification Requests", value: "3,209", delta: "+1.8% this week" },
-  { label: "Verifier Agents", value: "72", delta: "stable" },
-]
 
 const recentMints = [
   {
@@ -161,6 +156,7 @@ export default function DashboardPage() {
   const [featuredNft, setFeaturedNft] = useState<any>(null)
   const [nftLoading, setNftLoading] = useState(true)
   const [nfts, setNfts] = useState<any[]>([]) // <-- Hold all fetched NFTs
+  const { agentsCount } = useLeaderboardAgents()
   // Aggregate totals for pending verifications progress
   const pendingSummary = pendingVerifications.reduce(
     (acc, p) => {
@@ -173,9 +169,24 @@ export default function DashboardPage() {
     { completed: 0, totalRequired: 0 }
   );
 
+  
+
   // Used to update stats with real pending count and completed progress.
+  const [totalRequests, setTotalRequests] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function fetchTotalRequests() {
+      try {
+        const count = await getVerificationRequestsCount();
+        setTotalRequests(count);
+      } catch (err) {
+        setTotalRequests(null);
+      }
+    }
+    fetchTotalRequests();
+  }, []);
+
   const stats = [
-    ...baseStats,
     {
       label: "Pending Verifications",
       value: pendingLoading
@@ -198,6 +209,51 @@ export default function DashboardPage() {
       delta: pendingLoading
         ? ""
         : (pendingVerifications.length > 0 ? "+On-chain" : "No pendings"),
+    },
+    {
+      label: "Verifier Agents",
+      value: typeof agentsCount === "number"
+        ? (
+            <span className="flex items-center gap-2">
+              <span className="font-semibold text-green-300 text-lg">
+                {agentsCount.toLocaleString()}
+              </span>
+            </span>
+          )
+        : <Loader2 className="h-4 w-4 animate-spin inline text-green-400" />,
+      delta: typeof agentsCount === "number"
+        ? (agentsCount > 0 ? "+Active" : "No agents")
+        : "",
+    },
+    {
+      label: "Total Requests",
+      value: totalRequests === null
+        ? <Loader2 className="h-4 w-4 animate-spin inline text-cyan-400" />
+        : (
+            <span className="flex items-center gap-2">
+              <span className="font-semibold text-cyan-200 text-lg">
+                {totalRequests.toLocaleString()}
+              </span>
+            </span>
+          ),
+      delta: totalRequests === null
+        ? ""
+        : (totalRequests > 0 ? "+Ever" : "None"),
+    },
+    {
+      label: "Minted NFTs",
+      value: nftLoading
+        ? <Loader2 className="h-4 w-4 animate-spin inline text-purple-400" />
+        : (
+            <span className="flex items-center gap-2">
+              <span className="font-semibold text-purple-200 text-lg">
+                {nfts.length.toLocaleString()}
+              </span>
+            </span>
+          ),
+      delta: nftLoading
+        ? ""
+        : (nfts.length > 0 ? "+On-chain" : "None"),
     },
   ];
 
@@ -345,18 +401,24 @@ export default function DashboardPage() {
           </GlassCard>
         ) : (
           <GlassCard className="col-span-2 p-0 overflow-hidden h-full">
-            <div className="relative h-full">
-              <AspectRatio ratio={16 / 9} className="h-full">
+            <div className="relative h-full flex flex-col">
+              <div className="relative flex-1 bg-zinc-900/80 rounded-b-none rounded-t-xl overflow-hidden flex items-center justify-center min-h-[320px] max-h-[480px]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={featuredNft?.image || "/placeholder.svg"}
                   alt={`Featured NFT ${featuredNft?.nftId || ""}`}
-                  className="absolute inset-0 w-full h-full min-h-full object-cover object-[00%_10%]"
-                  style={{ height: "120%", width: "100%" }}
+                  className="w-full h-full max-h-[480px] rounded-t-xl object-contain bg-black"
+                  style={{
+                    objectFit: "contain",
+                    width: "100%",
+                    height: "100%",
+                    maxHeight: "480px",
+                    backgroundColor: "#000",
+                  }}
                 />
-              </AspectRatio>
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 px-4 py-5 md:px-7 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-zinc-900/60 via-zinc-900/5 to-transparent rounded-b-xl">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 z-10 px-4 py-5 md:px-7 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-zinc-900/60 via-zinc-900/5 to-transparent rounded-b-xl">
                 <div className="space-y-1">
                   <div className="text-xs text-white/70">Featured Mint</div>
                   <div className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">{featuredNft?.nftId}</div>
