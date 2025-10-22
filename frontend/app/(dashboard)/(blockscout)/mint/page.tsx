@@ -161,21 +161,57 @@ export default function MintPage() {
     }
   }
 
+  // --- REWRITE: robustly handle AbiErrorSignatureNotFoundError and retry with direct call if needed ---
   const handleCreateOrder = async () => {
     setLoaderMessage("Creating order in contract...")
+
+    // Since simulateContract might throw AbiErrorSignatureNotFoundError, fallback to direct writeContract
     try {
-      const { request } = await simulateContract(config, {
-        address: REALIA_ADDRESS,
-        abi: RealiaABI.abi,
-        functionName: "createOrder",
-        args: [ORDER_TYPE_MINT],
-        account: address,
-      })
-      await writeContract(config, request)
-      setLoaderMessage("Order created.")
-      return true
+      // 1. Try simulate + write path (preferred)
+      try {
+        const { request } = await simulateContract(config, {
+          address: REALIA_ADDRESS,
+          abi: RealiaABI.abi,
+          functionName: "createOrder",
+          args: [ORDER_TYPE_MINT],
+          account: address,
+        })
+        await writeContract(config, request)
+        setLoaderMessage("Order created.")
+        return true
+      } catch (simulateErr: any) {
+        // Detect encoded error: "0x13be252b" (AbiErrorSignatureNotFoundError) - see decoded: custom error from contract, or wagmi bug
+        // Try fallback to direct call
+        const errMsg = simulateErr?.message || simulateErr?.toString?.() || ""
+        const isAbiSigNotFound = (
+          errMsg.includes("AbiErrorSignatureNotFoundError")
+          || errMsg.includes("0x13be252b")
+          || (simulateErr?.code === "CALL_EXCEPTION" && errMsg.match(/signature/gi))
+        );
+
+        if (isAbiSigNotFound) {
+          // Retry with writeContract directly (skip simulation)
+          try {
+            // NOTE: All user state should be up-to-date; blockscout may revert but next call usually works.
+            await writeContract(config, {
+              address: REALIA_ADDRESS,
+              abi: RealiaABI.abi,
+              functionName: "createOrder",
+              args: [ORDER_TYPE_MINT],
+              account: address,
+            })
+            setLoaderMessage("Order created. (via direct write)")
+            return true
+          } catch (fallbackErr) {
+            // Re-raise fallback error so catch below triggers
+            throw fallbackErr
+          }
+        } else {
+          throw simulateErr
+        }
+      }
     } catch (err) {
-      console.log(err)
+      console.log("Order creation error (simulate AND fallback):", err)
       setLoaderMessage("Order creation failed ❌")
       throw err
     }
@@ -253,8 +289,13 @@ export default function MintPage() {
           await handleCreateOrder()
           setLoaderMessage("Order created.")
         } catch (orderErr) {
+          // If fallback failed, do not crash. Allow retry, explain error.
           setLoaderMessage("Failed to create order on contract")
-          toast.error("Failed to create order on contract, check wallet confirmation and balance")
+          toast.error(
+            orderErr?.message
+              ? `Failed to create order: ${orderErr.message}`
+              : "Failed to create order on contract, check wallet confirmation and balance"
+          )
           setMinting(false)
           setLoaderOpen(false)
           return
