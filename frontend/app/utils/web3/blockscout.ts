@@ -62,7 +62,7 @@ export async function getVerificationResponses(requestId: string) {
 }
 
 export async function getVerificationProgress(requestId: string) {
-    const REQUIRED = 5
+    const REQUIRED = 2
 
     const responses = await getVerificationResponses(requestId)
     const completed = responses.length
