@@ -187,7 +187,7 @@ export default function VerifyPage() {
         // getAgentResponse()
     }, [])
     React.useEffect(() => {
-        // console.log("debug", isVerified, watcherLoading, watcherError, response)
+        console.log("debug", isVerified, watcherLoading, watcherError, response)
     }, [isVerified, watcherLoading, watcherError, response])
 
     const [loaderMessages, setLoaderMessages] = React.useState<
