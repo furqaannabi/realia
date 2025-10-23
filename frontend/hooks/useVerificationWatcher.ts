@@ -17,6 +17,10 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const lastResponseRef = useRef<string>("");
+
+  const serialize = (obj: any) => JSON.stringify(obj);
+
   const startWatcher = useCallback(async (verificationId: string | number) => {
     if (!verificationId) return;
     console.log("Watcher Started for ID :", verificationId)
@@ -24,7 +28,8 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
     setIsVerified(false);
     setError(null);
     setAttemptCount(0);
-    setResponse([])
+    setResponse([]);
+    lastResponseRef.current = "";
 
     const startTime = Date.now();
 
@@ -48,25 +53,32 @@ export function useVerificationWatcher(timeoutMs = 1 * 60 * 1000, pollInterval =
 
         const res = await getResponseByAgent(verificationId);
 
-        console.log("Response By agent",res)
+        console.log("Response By agent", res);
         setAttemptCount((prev) => prev + 1);
 
-        if (res && Array.isArray(res) && res.length > 0) {
+        // Always log and store every unique response, do not stop after first
+        const serialized = serialize(res);
+        if (serialized !== lastResponseRef.current && res && Array.isArray(res) && res.length > 0) {
           setResponse(res);
-          clearInterval(pollRef.current!);
-          setLoading(false);
+          lastResponseRef.current = serialized;
 
-          // If any agent has verified=true, consider as verified.
-          const anyVerified = res.some((r: any) => r.verified);
+          // Count how many agents with verified === true
+          const verifiedCount = res.filter((r: any) => r.verified === true).length;
+          const anyVerified = verifiedCount > 0;
           setIsVerified(anyVerified);
 
-          if (anyVerified) {
+          if (verifiedCount >= 2) {
+            toast.success("✅ Minimum 2 agents verified, verification complete!");
+            setLoading(false);
+            clearInterval(pollRef.current!);
+          } else if (anyVerified) {
             toast.success("✅ Verification finalized by agent(s)!");
+            setLoading(false);
+            // continue polling for more agents
           } else {
             toast.info("⏳ Verification agent(s) responded, but not verified yet.");
+            // Continue polling for verification
           }
-
-          return;
         }
         // keep polling otherwise
       } catch (err) {
